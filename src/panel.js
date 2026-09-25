@@ -7,6 +7,9 @@
  * inspector become commands; the page applies them and the copy follows the
  * change event that comes back (no optimistic update).
  *
+ * Every frame of the inspected tab has its own agent. The panel lists the
+ * frames that hold a Gramlot instance and inspects one at a time.
+ *
  * Outside DevTools (automated tests) the page can be opened as
  * panel.html?tabId=N: then `inspectedWindow.eval` is not available.
  */
@@ -23,6 +26,7 @@ const tabId = devtools ? devtools.inspectedWindow.tabId : Number(new URLSearchPa
 const statusBar = document.getElementById('status');
 const messageLine = document.getElementById('message');
 const inspectorHost = document.getElementById('inspector');
+const frameSelect = document.getElementById('frame');
 const evaluateForm = document.getElementById('evaluate');
 const evaluateMode = document.getElementById('evaluate-mode');
 const expressionInput = document.getElementById('expression');
@@ -32,7 +36,9 @@ const resultLine = document.getElementById('result');
 if (devtools) evaluateMode.value = 'inspectedWindow';
 else evaluateMode.querySelector('[value="inspectedWindow"]').disabled = true;
 
-const state = {instanceId: null, pageId: null, pending: new Map(), log: [], violations: []};
+// frames: frameId -> {url, instance: {instanceId, pageId} | null}.
+// frameId/instanceId: the inspected frame and its instance.
+const state = {frames: new Map(), frameId: null, instanceId: null, pageId: null, pending: new Map(), log: [], violations: []};
 // Diagnostics for manual and automated verification; read-only use.
 globalThis.gramlotDevtools = state;
 // The extension CSP forbids eval/new Function: any attempt is recorded here.
@@ -46,6 +52,20 @@ function show(kind, text) {
     const connected = kind === 'connected';
     inspectorHost.hidden = !connected;
     evaluateForm.hidden = !connected;
+    renderFrames();
+}
+
+/** Frame selector: shown only when more than one frame holds an instance. */
+function renderFrames() {
+    const withInstance = [...state.frames].filter(([, frame]) => frame.instance);
+    frameSelect.hidden = withInstance.length < 2;
+    frameSelect.replaceChildren(...withInstance.map(([frameId, frame]) => {
+        const option = document.createElement('option');
+        option.value = String(frameId);
+        option.textContent = `${frameId === 0 ? 'top' : frame.url} · ${frame.instance.instanceId}`;
+        option.selected = frameId === state.frameId;
+        return option;
+    }));
 }
 
 // Chrome stops an idle MV3 service worker after about 30 s and closes its
@@ -53,10 +73,13 @@ function show(kind, text) {
 // is open; if the port closes anyway, the panel connects and attaches again.
 const PING_MS = 20000;
 let port = null;
-function send(type, payload) {
+function sendTo(frameId, type, payload) {
     const msg = message(type, payload);
-    port.postMessage(msg);
+    port.postMessage({control: 'to-frame', frameId, msg});
     return msg;
+}
+function send(type, payload) {
+    return sendTo(state.frameId, type, payload);
 }
 function request(type, payload, kind = null) {
     const requestId = nextId('r');
@@ -88,39 +111,70 @@ const tool = mountPanelInspector(inspectorHost, fromTytx(recipe, 'json'), sink);
 state.tool = tool;
 state.request = request;
 
-function reset(kind, text) {
+function clearCopies() {
+    state.frameId = null;
     state.instanceId = null;
     state.pageId = null;
     for (const root of ROOTS) tool.setBag(root, new Bag());
+}
+
+function reset(kind, text) {
+    clearCopies();
     show(kind, text);
 }
+
+/** Inspect the instance of one frame: new copies from new snapshots. */
+function select(frameId) {
+    const previous = state.frameId;
+    if (previous !== null && previous !== frameId && state.frames.get(previous)?.instance) {
+        for (const root of ROOTS) sendTo(previous, 'unsubscribe', {instanceId: state.instanceId, root});
+    }
+    clearCopies();
+    const frame = state.frames.get(frameId);
+    const instance = frame.instance;
+    state.frameId = frameId;
+    state.instanceId = instance.instanceId;
+    state.pageId = instance.pageId;
+    show('connected', `Gramlot instance ${instance.instanceId}` + (instance.pageId ? ` · page ${instance.pageId}` : '')
+        + (frameId === 0 ? '' : ` · frame ${frame.url}`));
+    for (const root of ROOTS) send('subscribe', {instanceId: instance.instanceId, root});
+}
+
+/** Keep the inspected frame if it still has an instance; otherwise pick one, top frame first. */
+function choose(removedText = 'No Gramlot instance in this page.') {
+    if (state.frameId !== null && state.frames.get(state.frameId)?.instance) { renderFrames(); return; }
+    const candidates = [...state.frames].filter(([, frame]) => frame.instance).map(([frameId]) => frameId);
+    if (!candidates.length) { reset('none', removedText); return; }
+    select(candidates.includes(0) ? 0 : Math.min(...candidates));
+}
+
+frameSelect.addEventListener('change', () => select(Number(frameSelect.value)));
 
 function resubscribe(root) {
     send('unsubscribe', {instanceId: state.instanceId, root});
     send('subscribe', {instanceId: state.instanceId, root});
 }
 
-function onProtocol(msg) {
+function onProtocol(frameId, url, msg) {
     const p = msg.payload;
     state.log.push(msg.type);
     if (state.log.length > 200) state.log.shift();
+    const inspected = frameId === state.frameId && p.instanceId === state.instanceId;
     switch (msg.type) {
         case 'hello': {
-            const instance = p.instances[0];
-            if (!instance) { reset('none', 'No Gramlot instance in this page.'); return; }
-            state.instanceId = instance.instanceId;
-            state.pageId = instance.pageId;
-            show('connected', `Gramlot instance ${instance.instanceId}` + (instance.pageId ? ` · page ${instance.pageId}` : ''));
-            for (const root of ROOTS) send('subscribe', {instanceId: instance.instanceId, root});
+            state.frames.set(frameId, {url, instance: p.instances[0] || null});
+            // A new hello from the inspected frame means a new instance there.
+            if (frameId === state.frameId) state.frameId = null;
+            choose();
             return;
         }
         case 'snapshot':
-            if (p.instanceId !== state.instanceId) return;
+            if (!inspected) return;
             if (p.error) { tool.setBag(p.root, new Bag(), `Snapshot failed: ${p.error}`); return; }
             tool.setBag(p.root, Bag.fromTytx(p.tytx, 'json'));
             return;
         case 'change': {
-            if (p.instanceId !== state.instanceId) return;
+            if (!inspected) return;
             const bag = tool.scopes[p.root].bag;
             try {
                 if (p.evt === 'error') throw new Error(p.error);
@@ -139,18 +193,32 @@ function onProtocol(msg) {
             pending.resolve(p);
             return;
         }
-        case 'bye':
-            if (p.instanceId === state.instanceId) reset('none', 'The Gramlot instance was removed.');
+        case 'bye': {
+            const frame = state.frames.get(frameId);
+            if (frame?.instance?.instanceId === p.instanceId) frame.instance = null;
+            if (inspected) state.frameId = null;
+            choose('The Gramlot instance was removed.');
             return;
+        }
         default:
             state.log.push(`unknown message ${msg.type}`);
     }
 }
 
 function onPortMessage(msg) {
-    if (msg.control === 'page-detached') { reset('waiting', 'Page unloaded. Waiting for the page…'); return; }
-    if (msg.control === 'inject-failed') { reset('none', `Cannot inspect this page: ${msg.error}`); return; }
-    if (isMessage(msg)) onProtocol(msg);
+    if (msg.control === 'frame') { if (isMessage(msg.msg)) onProtocol(msg.frameId, msg.url, msg.msg); return; }
+    if (msg.control === 'frame-detached') {
+        if (msg.frameId === 0) {
+            state.frames.clear();
+            reset('waiting', 'Page unloaded. Waiting for the page…');
+            return;
+        }
+        state.frames.delete(msg.frameId);
+        if (msg.frameId === state.frameId) state.frameId = null;
+        choose();
+        return;
+    }
+    if (msg.control === 'inject-failed') { state.frames.clear(); reset('none', `Cannot inspect this page: ${msg.error}`); }
 }
 
 function connect() {
@@ -159,6 +227,7 @@ function connect() {
     port.onDisconnect.addListener(() => {
         for (const pending of state.pending.values()) pending.resolve({ok: false, error: 'Disconnected from the extension.'});
         state.pending.clear();
+        state.frames.clear();
         reset('waiting', 'Disconnected from the extension. Reconnecting…');
         connect();
     });
@@ -190,7 +259,8 @@ function evaluateInspectedWindow(expression, root, nodePath) {
         catch (error) { return {text: String(result)}; }
     })()`;
     return new Promise((resolve) => {
-        devtools.inspectedWindow.eval(code, (value, exception) => {
+        const frameUrl = state.frameId ? state.frames.get(state.frameId).url : undefined;
+        devtools.inspectedWindow.eval(code, frameUrl ? {frameURL: frameUrl} : {}, (value, exception) => {
             if (exception?.isException) resolve({ok: false, error: String(exception.value)});
             else if (exception?.isError) resolve({ok: false, error: `${exception.code}: ${exception.description}`});
             else resolve({ok: true, ...value});

@@ -120,7 +120,8 @@ row). Moving between cells of the same row does not commit.
 
 See README "Known limits". Main ones:
 
-- One instance (`window.gramlot`), top frame only.
+- One instance per frame (`window.gramlot` of each frame). With two frames
+  at the same URL, `inspectedWindow.eval` can run in the wrong one.
 - After a committed edit the editor reloads the node when the change comes
   back; focus moved to another row of the same node is lost.
 - Bag values and node insertion/removal are not editable from the panel.
@@ -159,8 +160,8 @@ See README "Known limits". Main ones:
   (`gramlot.data.constructor`). A second TYTX registry in the agent would not
   know the page's Bag classes.
 - **On-demand injection** with `chrome.scripting` while the panel is open
-  (permission `scripting`, host permissions `http://localhost/*` and
-  `http://127.0.0.1/*`), not a static
+  (permissions `scripting` and `webNavigation`, host permissions
+  `http://localhost/*`, `http://127.0.0.1/*` and `file:///*`), not a static
   content script on every page.
 - **Instance detection:** the agent checks `window.gramlot` at `connect` and
   every 500 ms while connected; the timer stops at `disconnect`.
@@ -171,7 +172,9 @@ See README "Known limits". Main ones:
    selectable. No change.
 2. Panel recipe: `inspector-embedded.tytx`. No change.
 3. Host permissions restricted to `http://localhost/*` and
-   `http://127.0.0.1/*` (any port). Changed in `src/manifest.json`.
+   `http://127.0.0.1/*` (any port), then extended with `file:///*` at the
+   owner's request. `file://` pages also need **Allow access to file URLs**
+   in the extension details.
 4. Status line and evaluate form stay plain HTML/DOM. No change.
 5. `dist/` is not committed; it is built with `node build.mjs`. No change.
 6. Absolute default paths overridable by environment variables are
@@ -181,3 +184,18 @@ See README "Known limits". Main ones:
    not rebuilding them. TYTX encodes nulls correctly. The wrapper encoding of
    `attrs` stays, because in a partial update absent means unchanged and null
    means remove. Comments in `src/protocol.js` and the README were corrected.
+
+## Changes after the first delivery
+
+- Service worker lifetime (found in the owner's Chrome): Chrome stopped the
+  idle service worker after about 30 s, the ports closed and the panel went
+  empty. Headless tests never saw it, because Playwright keeps a debugger
+  attached to the service worker. The panel now pings every 20 s and
+  reconnects if the port closes anyway. `tests/e2e.mjs` stops the service
+  worker through CDP and checks the reconnection.
+- `file://` pages: host permission `file:///*` (owner request).
+- Iframes (owner request): one agent per frame, injection in all accessible
+  frames and on each frame load (`webNavigation.onCompleted`); frame routing
+  in control envelopes between background and panel; frame selector in the
+  status bar; `inspectedWindow.eval` with `frameURL`. Test page
+  `test-page/frames.html`; checks in `tests/e2e.mjs` and `tests/devtools.mjs`.

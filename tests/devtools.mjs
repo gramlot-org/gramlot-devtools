@@ -167,6 +167,18 @@ try {
         expectedErrors.push(...errors.splice(0).filter(line => line.includes('unsafe-eval')));
         assert.deepEqual(await evaluate('inspectedWindow'), {text: '"Ada 42" (string)', error: false});
     });
+    await check('iframes: inspectedWindow.eval runs in the inspected frame', async () => {
+        await page.goto(`${ORIGIN}/frames.html`);
+        await panel.until(`document.getElementById('frame').options.length === 2 && (${snapshotsDone})`);
+        await panel.evaluate(`(() => {
+            const select = document.getElementById('frame');
+            select.value = [...select.options].find(o => o.textContent.includes('frame=second')).value;
+            select.dispatchEvent(new Event('change'));
+        })()`);
+        await panel.until(`gramlotDevtools.frames.get(gramlotDevtools.frameId)?.url.includes('frame=second') && (${snapshotsDone})`);
+        const shown = await panel.evaluate(`gramlotDevtools.evaluate('location.search', 'inspectedWindow').then(r => r.shown)`);
+        assert.deepEqual(shown, {text: '"?frame=second" (string)', error: false});
+    });
     await check('criterion 8: no console errors in page or panel (except the expected CSP refusal)', async () => {
         assert.deepEqual(errors, []);
     });

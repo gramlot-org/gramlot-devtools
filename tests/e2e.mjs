@@ -227,6 +227,34 @@ try {
         const text = await panel.evaluate(() => document.getElementById('message').textContent);
         assert.equal(text, 'No Gramlot instance in this page.');
     });
+    await check('iframes: each frame instance is listed, inspected and edited separately', async () => {
+        await page.goto(`${ORIGIN}/frames.html`);
+        const frameOf = name => page.frames().find(f => f.url().includes(`frame=${name}`));
+        for (const name of ['first', 'second']) await frameOf(name).waitForFunction(() => window.gramlot?.state === 'started');
+        await frameOf('second').evaluate(() => gramlot.data.setItem('customer.name', 'Second frame'));
+        await panel.waitForFunction(() => document.getElementById('frame').options.length === 2
+            && !document.getElementById('frame').hidden
+            && document.getElementById('status').dataset.state === 'connected', null, {timeout: 10000});
+        const options = await panel.evaluate(() => [...document.getElementById('frame').options].map(o => o.textContent));
+        assert.ok(options.every(text => /frame=(first|second) · gramlot-1$/.test(text)), options.join(' | '));
+        // Pick the second frame from the selector.
+        const value = await panel.evaluate(() => [...document.getElementById('frame').options]
+            .find(o => o.textContent.includes('frame=second')).value);
+        await panel.selectOption('#frame', value);
+        await panel.waitForFunction(() => window.panelScopes.data.bag.getItem('customer.name') === 'Second frame', null, {timeout: 5000});
+        const second = frameOf('second');
+        const pageWire = await second.evaluate(() => ({data: gramlot.data.toTytx('json'), source: gramlot.source.toTytx('json')}));
+        const copyWire = await panel.evaluate(() => ({
+            data: window.panelScopes.data.bag.toTytx('json'), source: window.panelScopes.source.bag.toTytx('json')}));
+        assert.deepEqual(copyWire, pageWire);
+        await editRow('data', 'customer.name', 'value', 'Edited in frame');
+        await second.waitForFunction(() => gramlot.data.getItem('customer.name') === 'Edited in frame', null, {timeout: 3000});
+        assert.equal(await frameOf('first').evaluate(() => gramlot.data.getItem('customer.name')), 'Ada');
+        const out = await panel.evaluate(() => window.gramlotDevtools.evaluate('location.search', 'agent'));
+        assert.equal(out.shown.text, '"?frame=second" (string)');
+        await second.evaluate(() => gramlot.data.setItem('live', 1));
+        await panel.waitForFunction(() => window.panelScopes.data.bag.getItem('live') === 1, null, {timeout: 3000});
+    });
     await check('strict page CSP: agent-mode evaluate fails with EvalError, reported', async () => {
         await page.goto(`${ORIGIN}/csp.html`);
         await page.waitForFunction(() => window.gramlot?.state === 'started');

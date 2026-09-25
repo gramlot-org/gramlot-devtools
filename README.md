@@ -48,7 +48,10 @@ Gramlot's `dist/gramlot.js` must exist; this tool never builds Gramlot.
 
 1. `chrome://extensions` → enable **Developer mode**.
 2. **Load unpacked** → select `tools/gramlot-devtools-chrome/dist`.
-3. After a rebuild, press the reload icon of the extension card, then close
+3. For pages opened as `file://`: **Details** of the extension → enable
+   **Allow access to file URLs**. Chrome requires this switch in addition to
+   the `file:///*` host permission.
+4. After a rebuild, press the reload icon of the extension card, then close
    and reopen DevTools.
 
 ## Test page
@@ -63,6 +66,8 @@ python3 -m http.server 8765
 - `http://127.0.0.1:8765/csp.html`: the same page with
   `Content-Security-Policy: script-src 'self'`.
 - `http://127.0.0.1:8765/plain.html`: no Gramlot.
+- `http://127.0.0.1:8765/frames.html`: no Gramlot in the top frame; two
+  iframes, each with its own Gramlot instance.
 
 Open DevTools on the page and select the **Gramlot** panel.
 
@@ -84,8 +89,20 @@ DevTools
 - The panel copies change only from `snapshot` and `change` messages.
 - Edits in the panel become commands. The page applies them to the real Bags;
   the copy follows the change event that comes back. No optimistic update.
-- Injection: when the panel opens (`attach`) and after each completed load of
-  the tab (`chrome.tabs.onUpdated`, status `complete`).
+- One agent and one content script per frame. Injection: in all accessible
+  frames when the panel opens (`attach`), and in one frame after each
+  completed load of that frame (`chrome.webNavigation.onCompleted`), which
+  covers reloads, navigation and iframes added later. Frames the host
+  permissions do not cover are skipped.
+- Frames: the panel keeps the frames that hold an instance. It inspects one
+  at a time, top frame first. When more than one frame holds an instance, a
+  selector in the status bar lists them (`top` or frame URL, and instance id).
+  Choosing another frame unsubscribes the previous one and takes new
+  snapshots.
+- Service worker lifetime: Chrome stops an idle MV3 service worker after
+  about 30 s and closes its ports. The panel sends `{control: 'ping'}` every
+  20 s while it is open; if the port closes anyway, the panel connects again,
+  sends `attach` and receives new snapshots.
 - Closing DevTools: background sends `detach`; content tells the agent to
   `disconnect`. The agent unsubscribes from both Bags, stops its timer,
   removes its `message` and `pagehide` listeners and its marker
@@ -95,7 +112,7 @@ DevTools
 
 | File | Role |
 | --- | --- |
-| `src/manifest.json` | MV3 manifest: `scripting` permission, host permissions `http://localhost/*` and `http://127.0.0.1/*` |
+| `src/manifest.json` | MV3 manifest: `scripting` and `webNavigation` permissions, host permissions `http://localhost/*`, `http://127.0.0.1/*`, `file:///*` |
 | `src/protocol.js` | Protocol v1 constants, TYTX encoding helpers, change application. Imports nothing. |
 | `src/agent.js` | Page agent |
 | `src/content.js` | Content script bridge |
@@ -153,8 +170,17 @@ Panel → page:
 | `evaluate` | `{requestId, instanceId, root?, nodePath?, expression}` |
 
 Transport-level messages: `connect {session}` (content → agent) and
-`disconnect` (content → agent). Background ↔ panel/content use
-`{control: 'attach' | 'detach' | 'page-detached' | 'inject-failed'}`.
+`disconnect` (content → agent). Background ↔ panel/content use control
+messages; protocol messages are not rewritten, the frame travels around them:
+
+- panel → background: `{control: 'attach', tabId}`, `{control: 'ping'}`,
+  `{control: 'to-frame', frameId, msg}`;
+- background → panel: `{control: 'frame', frameId, url, msg}`,
+  `{control: 'frame-detached', frameId}`, `{control: 'inject-failed', error}`;
+- background → content: `{control: 'detach'}`.
+
+Instance ids are unique within a frame; the panel identifies an instance by
+frame id and instance id.
 
 `deleteAttribute` replaces the attribute set, because `node.delAttr()` emits
 no event. A command with `requestId` always gets a `result`.
@@ -169,7 +195,8 @@ The panel offers two modes:
 - `agent`: the agent evaluates with `new Function` in the page. The page CSP
   applies: under `script-src 'self'` it fails with `EvalError`.
 - `inspectedWindow.eval`: `chrome.devtools.inspectedWindow.eval`. DevTools
-  evaluates in the page; the page CSP does not block it. Default choice is
+  evaluates in the page; the page CSP does not block it. In a sub-frame it
+  runs with the `frameURL` option set to that frame's URL. Default choice is
   documented in FINALDOC.md.
 
 ## Tests
@@ -191,7 +218,9 @@ versions.
 
 ## Known limits
 
-- One instance per page: `window.gramlot`. Iframes are not inspected.
+- One instance per frame: `window.gramlot` of each frame.
+- `inspectedWindow.eval` selects a sub-frame by URL: with two frames at the
+  same URL it can run in the wrong one. The agent mode has no such limit.
 - The copy is rebuilt from a new snapshot when a change cannot be applied.
 - Values that TYTX cannot encode (for example functions) make the snapshot
   fail; the panel shows the error. Evaluate results fall back to `String()`.
@@ -203,8 +232,10 @@ versions.
   read-only). Nodes cannot be added or removed from the panel.
 - The page can see the agent's `window.postMessage` traffic and could forge
   messages. This is a development tool.
-- Host permissions cover only `http://localhost/*` and `http://127.0.0.1/*`,
-  on any port. On other origins the injection fails and the panel shows the
-  error. The extension injects only while its panel is open for that tab.
+- Host permissions cover only `http://localhost/*` and `http://127.0.0.1/*`
+  (any port) and `file:///*`. `file://` pages also need **Allow access to
+  file URLs**. On other origins the injection fails and the panel shows the
+  error; iframes from other origins are not inspected. The extension injects
+  only while its panel is open for that tab.
 - The status bar and the evaluate form of the panel are plain HTML and DOM
   code, not Gramlot/PoC Source.
