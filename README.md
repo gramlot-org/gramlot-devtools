@@ -96,9 +96,10 @@ DevTools
   permissions do not cover are skipped.
 - Frames: the panel keeps the frames that hold an instance. It inspects one
   at a time, top frame first. When more than one frame holds an instance, a
-  selector in the status bar lists them: `top`, or the frame URL relative to
-  the top frame directory (path from the root on the same origin, full URL
-  on another origin), and the instance id.
+  selector in the status bar lists them by page title (`(top)` marks the top
+  frame). Without a title, and in the option tooltip, a frame is shown by its
+  path: `top`, or the frame URL relative to the top frame directory (path
+  from the root on the same origin, full URL on another origin).
   Choosing another frame unsubscribes the previous one and takes new
   snapshots.
 - Service worker lifetime: Chrome stops an idle MV3 service worker after
@@ -150,7 +151,7 @@ Page → panel:
 
 | Type | Payload |
 | --- | --- |
-| `hello` | `{instances: [{instanceId, pageId}]}`; `instances: []` when the page has no Gramlot |
+| `hello` | `{instances: [{instanceId, pageId, title}]}`; `title` is `document.title` when the instance appears; `instances: []` when the page has no Gramlot |
 | `snapshot` | `{instanceId, root: 'data'\|'source', tytx}` or `{..., error}` |
 | `change` | `{instanceId, root, evt: 'ins'\|'upd'\|'del', path, ind?, tytxValue?, bag?, attrs?}` |
 | `result` | `{requestId, ok, tytxValue?, bag?, text?, error?}` |

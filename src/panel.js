@@ -56,11 +56,11 @@ function show(kind, text) {
 }
 
 /**
- * Label of a frame: 'top' for the top frame; for a sub-frame its URL relative
+ * Path of a frame: 'top' for the top frame; for a sub-frame its URL relative
  * to the top frame directory, the path from the root on the same origin, or
  * the full URL on another origin.
  */
-function frameLabel(frameId) {
+function framePath(frameId) {
     if (frameId === 0) return 'top';
     const url = new URL(state.frames.get(frameId).url);
     const topUrl = state.frames.get(0)?.url;
@@ -72,6 +72,13 @@ function frameLabel(frameId) {
     return url.pathname.startsWith(directory) ? path.slice(directory.length) : path;
 }
 
+/** Label of a frame: the page title of its instance, else its path; '(top)' marks the top frame. */
+function frameLabel(frameId) {
+    const title = state.frames.get(frameId).instance?.title;
+    if (!title) return framePath(frameId);
+    return frameId === 0 ? `${title} (top)` : title;
+}
+
 /** Frame selector: shown only when more than one frame holds an instance. */
 function renderFrames() {
     const withInstance = [...state.frames].filter(([, frame]) => frame.instance);
@@ -79,7 +86,8 @@ function renderFrames() {
     frameSelect.replaceChildren(...withInstance.map(([frameId, frame]) => {
         const option = document.createElement('option');
         option.value = String(frameId);
-        option.textContent = `${frameLabel(frameId)} · ${frame.instance.instanceId}`;
+        option.textContent = frameLabel(frameId);
+        option.title = framePath(frameId);
         option.selected = frameId === state.frameId;
         return option;
     }));

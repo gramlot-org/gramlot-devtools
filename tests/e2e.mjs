@@ -235,11 +235,12 @@ try {
         await panel.waitForFunction(() => document.getElementById('frame').options.length === 2
             && !document.getElementById('frame').hidden
             && document.getElementById('status').dataset.state === 'connected', null, {timeout: 10000});
-        const options = await panel.evaluate(() => [...document.getElementById('frame').options].map(o => o.textContent));
-        assert.deepEqual(options.sort(), ['index.html?frame=first · gramlot-1', 'index.html?frame=second · gramlot-1']);
+        const options = await panel.evaluate(() => [...document.getElementById('frame').options].map(o => [o.textContent, o.title]));
+        assert.deepEqual(options.sort(), [['Gramlot DevTools test page', 'index.html?frame=first'],
+            ['Gramlot DevTools test page', 'index.html?frame=second']]);
         // Pick the second frame from the selector.
         const value = await panel.evaluate(() => [...document.getElementById('frame').options]
-            .find(o => o.textContent.includes('frame=second')).value);
+            .find(o => o.title.includes('frame=second')).value);
         await panel.selectOption('#frame', value);
         await panel.waitForFunction(() => window.panelScopes.data.bag.getItem('customer.name') === 'Second frame', null, {timeout: 5000});
         const second = frameOf('second');

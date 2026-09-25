@@ -172,7 +172,7 @@ try {
         await panel.until(`document.getElementById('frame').options.length === 2 && (${snapshotsDone})`);
         await panel.evaluate(`(() => {
             const select = document.getElementById('frame');
-            select.value = [...select.options].find(o => o.textContent.includes('frame=second')).value;
+            select.value = [...select.options].find(o => o.title.includes('frame=second')).value;
             select.dispatchEvent(new Event('change'));
         })()`);
         await panel.until(`gramlotDevtools.frames.get(gramlotDevtools.frameId)?.url.includes('frame=second') && (${snapshotsDone})`);

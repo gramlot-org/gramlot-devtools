@@ -86,7 +86,8 @@ function install() {
         }
         if (found && !tracked) {
             tracked = found;
-            send('hello', {instances: [{instanceId: found.instanceId, pageId: found.gramlot.pageId ?? null}]});
+            send('hello', {instances: [{instanceId: found.instanceId, pageId: found.gramlot.pageId ?? null,
+                title: document.title}]});
         }
         return found;
     };
