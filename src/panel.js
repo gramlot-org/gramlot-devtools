@@ -55,6 +55,23 @@ function show(kind, text) {
     renderFrames();
 }
 
+/**
+ * Label of a frame: 'top' for the top frame; for a sub-frame its URL relative
+ * to the top frame directory, the path from the root on the same origin, or
+ * the full URL on another origin.
+ */
+function frameLabel(frameId) {
+    if (frameId === 0) return 'top';
+    const url = new URL(state.frames.get(frameId).url);
+    const topUrl = state.frames.get(0)?.url;
+    if (!topUrl) return url.href;
+    const top = new URL(topUrl);
+    if (url.origin !== top.origin) return url.href;
+    const directory = top.pathname.slice(0, top.pathname.lastIndexOf('/') + 1);
+    const path = url.pathname + url.search + url.hash;
+    return url.pathname.startsWith(directory) ? path.slice(directory.length) : path;
+}
+
 /** Frame selector: shown only when more than one frame holds an instance. */
 function renderFrames() {
     const withInstance = [...state.frames].filter(([, frame]) => frame.instance);
@@ -62,7 +79,7 @@ function renderFrames() {
     frameSelect.replaceChildren(...withInstance.map(([frameId, frame]) => {
         const option = document.createElement('option');
         option.value = String(frameId);
-        option.textContent = `${frameId === 0 ? 'top' : frame.url} · ${frame.instance.instanceId}`;
+        option.textContent = `${frameLabel(frameId)} · ${frame.instance.instanceId}`;
         option.selected = frameId === state.frameId;
         return option;
     }));
@@ -136,7 +153,7 @@ function select(frameId) {
     state.instanceId = instance.instanceId;
     state.pageId = instance.pageId;
     show('connected', `Gramlot instance ${instance.instanceId}` + (instance.pageId ? ` · page ${instance.pageId}` : '')
-        + (frameId === 0 ? '' : ` · frame ${frame.url}`));
+        + (frameId === 0 ? '' : ` · frame ${frameLabel(frameId)}`));
     for (const root of ROOTS) send('subscribe', {instanceId: instance.instanceId, root});
 }
 

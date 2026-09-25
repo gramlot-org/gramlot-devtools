@@ -96,7 +96,9 @@ DevTools
   permissions do not cover are skipped.
 - Frames: the panel keeps the frames that hold an instance. It inspects one
   at a time, top frame first. When more than one frame holds an instance, a
-  selector in the status bar lists them (`top` or frame URL, and instance id).
+  selector in the status bar lists them: `top`, or the frame URL relative to
+  the top frame directory (path from the root on the same origin, full URL
+  on another origin), and the instance id.
   Choosing another frame unsubscribes the previous one and takes new
   snapshots.
 - Service worker lifetime: Chrome stops an idle MV3 service worker after

@@ -236,7 +236,7 @@ try {
             && !document.getElementById('frame').hidden
             && document.getElementById('status').dataset.state === 'connected', null, {timeout: 10000});
         const options = await panel.evaluate(() => [...document.getElementById('frame').options].map(o => o.textContent));
-        assert.ok(options.every(text => /frame=(first|second) · gramlot-1$/.test(text)), options.join(' | '));
+        assert.deepEqual(options.sort(), ['index.html?frame=first · gramlot-1', 'index.html?frame=second · gramlot-1']);
         // Pick the second frame from the selector.
         const value = await panel.evaluate(() => [...document.getElementById('frame').options]
             .find(o => o.textContent.includes('frame=second')).value);
