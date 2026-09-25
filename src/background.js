@@ -3,7 +3,8 @@
  * Service worker: routes messages between one panel and the content script of
  * its inspected tab, and injects agent + content script on demand.
  *
- * Panel port messages:  {control: 'attach', tabId} | protocol message
+ * Panel port messages:  {control: 'attach', tabId} | {control: 'ping'} |
+ *   protocol message
  * Content port messages: protocol message
  * Messages to the panel: protocol message | {control: 'page-detached'} |
  *   {control: 'inject-failed', error}
@@ -35,6 +36,8 @@ chrome.runtime.onConnect.addListener((port) => {
                 inject(tabId);
                 return;
             }
+            // Keeps the service worker alive while the panel is open.
+            if (msg.control === 'ping') return;
             tabs.get(tabId)?.content?.postMessage(msg);
         });
         port.onDisconnect.addListener(() => {

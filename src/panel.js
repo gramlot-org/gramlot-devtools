@@ -48,7 +48,11 @@ function show(kind, text) {
     evaluateForm.hidden = !connected;
 }
 
-const port = chrome.runtime.connect({name: 'gramlot-devtools-panel'});
+// Chrome stops an idle MV3 service worker after about 30 s and closes its
+// ports. Every message resets that timer, so the panel sends a ping while it
+// is open; if the port closes anyway, the panel connects and attaches again.
+const PING_MS = 20000;
+let port = null;
 function send(type, payload) {
     const msg = message(type, payload);
     port.postMessage(msg);
@@ -143,12 +147,23 @@ function onProtocol(msg) {
     }
 }
 
-port.onMessage.addListener((msg) => {
+function onPortMessage(msg) {
     if (msg.control === 'page-detached') { reset('waiting', 'Page unloaded. Waiting for the page…'); return; }
     if (msg.control === 'inject-failed') { reset('none', `Cannot inspect this page: ${msg.error}`); return; }
     if (isMessage(msg)) onProtocol(msg);
-});
-port.onDisconnect.addListener(() => reset('none', 'Disconnected from the extension.'));
+}
+
+function connect() {
+    port = chrome.runtime.connect({name: 'gramlot-devtools-panel'});
+    port.onMessage.addListener(onPortMessage);
+    port.onDisconnect.addListener(() => {
+        for (const pending of state.pending.values()) pending.resolve({ok: false, error: 'Disconnected from the extension.'});
+        state.pending.clear();
+        reset('waiting', 'Disconnected from the extension. Reconnecting…');
+        connect();
+    });
+    port.postMessage({control: 'attach', tabId});
+}
 
 function formatResult(result) {
     if (!result.ok) return {text: result.error, error: true};
@@ -201,4 +216,5 @@ evaluateForm.addEventListener('submit', (event) => {
 });
 
 show('waiting', 'Connecting to the page…');
-port.postMessage({control: 'attach', tabId});
+connect();
+setInterval(() => port.postMessage({control: 'ping'}), PING_MS);

@@ -193,6 +193,22 @@ try {
         assert.equal(copyWire.data, pageWire.data);
         assert.equal(copyWire.source, pageWire.source);
     });
+    await check('service worker stopped by Chrome: the panel reconnects with a new snapshot', async () => {
+        const before = await panel.evaluate(() => window.gramlotDevtools.log.filter(t => t === 'hello').length);
+        const cdp = await context.newCDPSession(panel);
+        await cdp.send('ServiceWorker.enable');
+        await cdp.send('ServiceWorker.stopAllWorkers');
+        await cdp.detach();
+        await panel.waitForFunction(n => window.gramlotDevtools.log.filter(t => t === 'hello').length > n
+            && window.gramlotDevtools.instanceId, before, {timeout: 10000});
+        await panel.waitForFunction(() => window.panelScopes.source.bag.getNode('main'), null, {timeout: 5000});
+        const {pageWire, copyWire} = await same();
+        assert.equal(copyWire.data, pageWire.data);
+        assert.equal(copyWire.source, pageWire.source);
+        await page.evaluate(() => gramlot.data.setItem('afterRestart', 1));
+        await panel.waitForFunction(() => window.panelScopes.data.bag.getItem('afterRestart') === 1, null, {timeout: 3000});
+        await page.evaluate(() => gramlot.data.delItem('afterRestart'));
+    });
     await check('criterion 9: the page loads no PoC runtime (network requests)', async () => {
         const own = requests.filter(url => url.startsWith(ORIGIN)).map(url => new URL(url).pathname);
         assert.deepEqual([...new Set(own)].sort(), ['/index.html', '/page.js', '/vendor/gramlot.js']);
