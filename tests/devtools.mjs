@@ -90,6 +90,8 @@ const expectedErrors = [];
 
 const context = await chromium.launchPersistentContext('', {
     headless: true, channel: 'chromium',
+    // Playwright disables the back/forward cache by default; Chrome has it on.
+    ignoreDefaultArgs: ['--disable-back-forward-cache'],
     args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`,
         '--auto-open-devtools-for-tabs', `--remote-debugging-port=${DEBUG_PORT}`],
 });

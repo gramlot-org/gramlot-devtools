@@ -47,6 +47,8 @@ const watch = (page, label) => {
 
 const context = await chromium.launchPersistentContext('', {
     headless: true, channel: 'chromium',
+    // Playwright disables the back/forward cache by default; Chrome has it on.
+    ignoreDefaultArgs: ['--disable-back-forward-cache'],
     args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
 });
 try {
@@ -226,6 +228,19 @@ try {
         await panel.waitForFunction(() => document.getElementById('status').dataset.state === 'none', null, {timeout: 10000});
         const text = await panel.evaluate(() => document.getElementById('message').textContent);
         assert.equal(text, 'No Gramlot instance in this page.');
+    });
+    await check('back navigation restored from the back/forward cache reconnects the panel', async () => {
+        await page.goto(`${ORIGIN}/index.html`);
+        await page.waitForFunction(() => window.gramlot?.state === 'started');
+        await panel.waitForFunction(() => document.getElementById('status').dataset.state === 'connected', null, {timeout: 10000});
+        await page.evaluate(() => { window.bfcacheMarker = true; });
+        await page.goto(`${ORIGIN}/plain.html`);
+        await panel.waitForFunction(() => document.getElementById('status').dataset.state === 'none', null, {timeout: 10000});
+        // A restore from the cache fires no load event.
+        await page.goBack({waitUntil: 'commit'});
+        assert.equal(await page.evaluate(() => window.bfcacheMarker === true), true, 'page not restored from the back/forward cache');
+        await panel.waitForFunction(() => document.getElementById('status').dataset.state === 'connected'
+            && window.panelScopes.data.bag.getItem('customer.name') === 'Ada', null, {timeout: 10000});
     });
     await check('iframes: each frame instance is listed, inspected and edited separately', async () => {
         await page.goto(`${ORIGIN}/frames.html`);
