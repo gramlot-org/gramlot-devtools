@@ -35,6 +35,9 @@ if (!globalThis[GUARD]) {
         if (msg.control === 'detach') { teardown(); port.disconnect(); return; }
         if (isMessage(msg)) toPage(msg);
     });
-    port.onDisconnect.addListener(teardown);
+    port.onDisconnect.addListener(() => {
+        void chrome.runtime.lastError; // handled: background or page went away
+        teardown();
+    });
     toPage(message('connect', {session}));
 }

@@ -54,6 +54,7 @@ chrome.runtime.onConnect.addListener((port) => {
             if (msg.control === 'to-frame') tabs.get(tabId)?.frames.get(msg.frameId)?.postMessage(msg.msg);
         });
         port.onDisconnect.addListener(() => {
+            void chrome.runtime.lastError; // handled: the panel went away
             const entry = tabs.get(tabId);
             if (!entry || entry.panel !== port) return;
             detachAll(entry);
@@ -73,6 +74,8 @@ chrome.runtime.onConnect.addListener((port) => {
             if (entry.frames.get(frameId) === port) entry.panel.postMessage({control: 'frame', frameId, url, msg});
         });
         port.onDisconnect.addListener(() => {
+            // Handled: for example the page moved into the back/forward cache.
+            void chrome.runtime.lastError;
             if (entry.frames.get(frameId) !== port) return;
             entry.frames.delete(frameId);
             if (tabs.get(tabId) === entry) entry.panel.postMessage({control: 'frame-detached', frameId});

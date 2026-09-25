@@ -252,6 +252,10 @@ function connect() {
     port = chrome.runtime.connect({name: 'gramlot-devtools-panel'});
     port.onMessage.addListener(onPortMessage);
     port.onDisconnect.addListener(() => {
+        // Reading lastError marks it as handled (for example: the inspected
+        // page moved into the back/forward cache); the panel reconnects.
+        const reason = chrome.runtime.lastError?.message;
+        state.log.push(`port closed${reason ? `: ${reason}` : ''}`);
         for (const pending of state.pending.values()) pending.resolve({ok: false, error: 'Disconnected from the extension.'});
         state.pending.clear();
         state.frames.clear();
