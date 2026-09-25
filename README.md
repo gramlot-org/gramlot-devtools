@@ -193,7 +193,9 @@ no event. A command with `requestId` always gets a `result`.
 The expression is evaluated in the page as
 `(gramlot, node, value) => (expression)`, where `node` is the Data node at
 `nodePath` (the node selected in the Data tree) and `value` its static value.
-The panel offers two modes:
+Two modes exist. The panel form uses `inspectedWindow.eval` in DevTools and
+`agent` outside DevTools; the agent mode stays reachable from the panel
+console with `gramlotDevtools.evaluate(expression, 'agent')`:
 
 - `agent`: the agent evaluates with `new Function` in the page. The page CSP
   applies: under `script-src 'self'` it fails with `EvalError`.

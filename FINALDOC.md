@@ -90,7 +90,8 @@ An edit is committed when focus leaves the edited row (click outside the
 row). Moving between cells of the same row does not commit.
 
 1. Criterion 1: the **Gramlot** tab is in DevTools (it can be in the `»`
-   overflow menu). The status line reads `Gramlot instance gramlot-1`.
+   overflow menu). Once connected, the status text is hidden; its tooltip
+   reads `Gramlot instance gramlot-1`.
 2. Criterion 2: Data tab: expand `customer` → `orders` → `o1`; select
    `total`: value `12.5`, attribute `currency = EUR`. Source tab: expand
    `main` → `div_0` → `ul_0`; select `div_0`: attributes `id`, `class`.
@@ -104,8 +105,9 @@ row). Moving between cells of the same row does not commit.
 6. Criterion 6: reload the page (F5). The panel shows `Page unloaded…`, then
    the instance again with fresh trees.
 7. Criterion 7: type `6 * 7` in the expression field, **Evaluate**:
-   `42 (number)`. Repeat with mode `agent`. On `csp.html`, `agent` returns an
-   `EvalError`; `inspectedWindow.eval` returns `42 (number)`.
+   `42 (number)`. On `csp.html` the form also returns `42 (number)`; in the
+   panel console `await gramlotDevtools.evaluate('6 * 7', 'agent')` returns
+   an `EvalError` result.
 8. Criterion 8: during steps 1–7 the page console and the panel console
    (right-click in the panel → Inspect) show no errors, except the
    `unsafe-eval` refusal of step 7 on `csp.html`. In the panel console,
@@ -132,8 +134,10 @@ See README "Known limits". Main ones:
 - **evaluate: default `inspectedWindow.eval`.** Observed: on `csp.html`
   (`script-src 'self'`) the agent mode fails with `EvalError`, because the
   agent's `new Function` runs in the page and the page CSP applies.
-  `chrome.devtools.inspectedWindow.eval` works on both pages. Both modes stay
-  selectable; outside DevTools only the agent mode exists. Both evaluate in
+  `chrome.devtools.inspectedWindow.eval` works on both pages. The panel form
+  uses it; the mode selector was removed at the owner's request, the agent
+  mode stays reachable from the panel console; outside DevTools only the
+  agent mode exists. Both evaluate in
   the page and return TYTX-encoded results built with the page's Bag class.
   `inspectedWindow.eval` does not travel over the extension protocol: the
   panel builds the code string and DevTools runs it.
@@ -168,8 +172,9 @@ See README "Known limits". Main ones:
 
 ## Owner decisions (2026-09-25)
 
-1. `evaluate`: default `inspectedWindow.eval`; the agent mode stays
-   selectable. No change.
+1. `evaluate`: `inspectedWindow.eval` in the panel form. The mode selector
+   and the connected status text were later removed as confusing; the agent
+   mode stays reachable from the panel console.
 2. Panel recipe: `inspector-embedded.tytx`. No change.
 3. Host permissions restricted to `http://localhost/*` and
    `http://127.0.0.1/*` (any port), then extended with `file:///*` at the

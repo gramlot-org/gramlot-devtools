@@ -28,13 +28,12 @@ const messageLine = document.getElementById('message');
 const inspectorHost = document.getElementById('inspector');
 const frameSelect = document.getElementById('frame');
 const evaluateForm = document.getElementById('evaluate');
-const evaluateMode = document.getElementById('evaluate-mode');
 const expressionInput = document.getElementById('expression');
 const resultLine = document.getElementById('result');
-// Default: inspectedWindow.eval, which the page CSP does not block. Outside
-// DevTools only the agent mode exists.
-if (devtools) evaluateMode.value = 'inspectedWindow';
-else evaluateMode.querySelector('[value="inspectedWindow"]').disabled = true;
+// inspectedWindow.eval, which the page CSP does not block. Outside DevTools
+// only the agent mode exists. The agent mode stays reachable from the panel
+// console: gramlotDevtools.evaluate(expression, 'agent').
+const EVALUATE_MODE = devtools ? 'inspectedWindow' : 'agent';
 
 // frames: frameId -> {url, instance: {instanceId, pageId} | null}.
 // frameId/instanceId: the inspected frame and its instance.
@@ -50,6 +49,9 @@ function show(kind, text) {
     statusBar.dataset.state = kind;
     messageLine.textContent = text;
     const connected = kind === 'connected';
+    // Connected, the trees speak for themselves: the text is only a tooltip.
+    messageLine.hidden = connected;
+    statusBar.title = connected ? text : '';
     inspectorHost.hidden = !connected;
     evaluateForm.hidden = !connected;
     renderFrames();
@@ -87,7 +89,7 @@ function renderFrames() {
         const option = document.createElement('option');
         option.value = String(frameId);
         option.textContent = frameLabel(frameId);
-        option.title = framePath(frameId);
+        option.title = `${framePath(frameId)} · ${frame.instance.instanceId}`;
         option.selected = frameId === state.frameId;
         return option;
     }));
@@ -293,7 +295,7 @@ function evaluateInspectedWindow(expression, root, nodePath) {
     });
 }
 
-async function evaluate(expression, mode = evaluateMode.value) {
+async function evaluate(expression, mode = EVALUATE_MODE) {
     const nodePath = tool.app.builder.data.getItem('dataPath') || undefined;
     const payload = {instanceId: state.instanceId, root: 'data', nodePath, expression};
     const result = mode === 'inspectedWindow'
