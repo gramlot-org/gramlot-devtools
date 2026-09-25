@@ -121,9 +121,6 @@ row). Moving between cells of the same row does not commit.
 See README "Known limits". Main ones:
 
 - One instance (`window.gramlot`), top frame only.
-- Null attributes inside a snapshot are lost by `Bag.fromTytx` (observed in
-  @jsr/genro__bag 0.5.3). Null attributes in `change` messages are kept by
-  the wrapper encoding.
 - After a committed edit the editor reloads the node when the change comes
   back; focus moved to another row of the same node is lost.
 - Bag values and node insertion/removal are not editable from the panel.
@@ -162,26 +159,25 @@ See README "Known limits". Main ones:
   (`gramlot.data.constructor`). A second TYTX registry in the agent would not
   know the page's Bag classes.
 - **On-demand injection** with `chrome.scripting` while the panel is open
-  (permission `scripting`, host permission `<all_urls>`), not a static
+  (permission `scripting`, host permissions `http://localhost/*` and
+  `http://127.0.0.1/*`), not a static
   content script on every page.
 - **Instance detection:** the agent checks `window.gramlot` at `connect` and
   every 500 ms while connected; the timer stops at `disconnect`.
 
-## Questions for the owner
+## Owner decisions (2026-09-25)
 
-1. `evaluate`: is the default `inspectedWindow.eval` acceptable, given that it
-   bypasses both the page CSP and the extension protocol? Or should only the
-   agent mode remain?
-2. Panel recipe: is `inspector-embedded.tytx` in the panel acceptable, while
-   step 1 used `inspector.tytx`?
-3. Host permission: keep `<all_urls>`, or restrict it (for example to
-   `http://localhost/*` and `http://127.0.0.1/*`)?
-4. The panel status line and evaluate form are plain HTML/DOM code. Is that
-   acceptable for an external tool, or should they be PoC Source?
-5. `dist/` is git-ignored and must be built. Should a built `dist/` be
-   committed so the extension can be loaded without building?
-6. `build.mjs` and the tests default to absolute paths of this machine
-   (Gramlot `js/`, gramlot-poc `node_modules`, gramlot-rosetta Playwright),
-   overridable by environment variables. Is that acceptable?
-7. `Bag.fromTytx` drops null attributes (observed in @jsr/genro__bag 0.5.3).
-   Should this be reported to the Bag library?
+1. `evaluate`: default `inspectedWindow.eval`; the agent mode stays
+   selectable. No change.
+2. Panel recipe: `inspector-embedded.tytx`. No change.
+3. Host permissions restricted to `http://localhost/*` and
+   `http://127.0.0.1/*` (any port). Changed in `src/manifest.json`.
+4. Status line and evaluate form stay plain HTML/DOM. No change.
+5. `dist/` is not committed; it is built with `node build.mjs`. No change.
+6. Absolute default paths overridable by environment variables are
+   acceptable; they are documented in the README. No change.
+7. Null attributes: not a defect, no report. In a Bag an absent attribute and
+   a null attribute are the same thing, so `Bag.fromTytx` is consistent in
+   not rebuilding them. TYTX encodes nulls correctly. The wrapper encoding of
+   `attrs` stays, because in a partial update absent means unchanged and null
+   means remove. Comments in `src/protocol.js` and the README were corrected.

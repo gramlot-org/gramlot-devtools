@@ -95,7 +95,7 @@ DevTools
 
 | File | Role |
 | --- | --- |
-| `src/manifest.json` | MV3 manifest: `scripting` permission, `<all_urls>` host permission |
+| `src/manifest.json` | MV3 manifest: `scripting` permission, host permissions `http://localhost/*` and `http://127.0.0.1/*` |
 | `src/protocol.js` | Protocol v1 constants, TYTX encoding helpers, change application. Imports nothing. |
 | `src/agent.js` | Page agent |
 | `src/content.js` | Content script bridge |
@@ -122,8 +122,10 @@ Values travel as TYTX text:
   is the TYTX text of a one-node wrapper Bag (`v`), so dates, decimals and
   nulls keep their type.
 - `attrs`: TYTX text of a one-node wrapper Bag carrying the attributes. When an
-  attribute is null, the wrapper value is the ordered list of attribute names,
-  because `Bag.fromTytx` drops null attributes.
+  attribute is null, the wrapper value is the ordered list of attribute names.
+  In a Bag an absent attribute and a null attribute are the same thing, so
+  `Bag.fromTytx` does not rebuild null attributes; in a partial update they
+  differ (absent: unchanged; null: remove), and the list keeps the nulls.
 
 Page → panel:
 
@@ -195,15 +197,14 @@ versions.
   fail; the panel shows the error. Evaluate results fall back to `String()`.
 - Nodes with resolvers: the agent does not resolve them; what the snapshot
   contains is what `Bag.toTytx` produces for them.
-- Null attributes present in a snapshot are lost by `Bag.fromTytx`; null
-  attributes in `change` messages are kept.
 - After a committed edit the editor reloads the node when the change comes
   back; focus moved to another row of the same node is lost.
 - Bag values cannot be edited (as in the PoC editor: complex values are
   read-only). Nodes cannot be added or removed from the panel.
 - The page can see the agent's `window.postMessage` traffic and could forge
   messages. This is a development tool.
-- `<all_urls>` host permission: the extension can inject into any page, but
-  only while its panel is open for that tab.
+- Host permissions cover only `http://localhost/*` and `http://127.0.0.1/*`,
+  on any port. On other origins the injection fails and the panel shows the
+  error. The extension injects only while its panel is open for that tab.
 - The status bar and the evaluate form of the panel are plain HTML and DOM
   code, not Gramlot/PoC Source.

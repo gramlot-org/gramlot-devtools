@@ -58,9 +58,11 @@ export function decodeValue(bagClasses, encoded) {
 
 /**
  * Encode attributes as the TYTX text of a one-node wrapper Bag.
- * Bag.fromTytx() drops null attributes. When one is null, the ordered list
- * of all attribute names travels as the wrapper node value, and
- * decodeAttrs() restores the nulls in their place.
+ * In a Bag an absent attribute and a null attribute are the same thing, so
+ * Bag.fromTytx() does not rebuild null attributes. In a partial update they
+ * differ: absent means unchanged, null means remove. When an attribute is
+ * null, the ordered list of all attribute names travels as the wrapper node
+ * value, and decodeAttrs() restores the nulls in their place.
  */
 export function encodeAttrs(BagClass, attrs) {
     const wrapper = new BagClass();

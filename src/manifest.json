@@ -7,5 +7,5 @@
   "devtools_page": "devtools.html",
   "background": {"service_worker": "background.js", "type": "module"},
   "permissions": ["scripting"],
-  "host_permissions": ["<all_urls>"]
+  "host_permissions": ["http://localhost/*", "http://127.0.0.1/*"]
 }
