@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Gramlot</title>
+<link rel="stylesheet" href="panel.css">
+</head>
+<body>
+<div id="status" data-state="waiting">
+  <span id="message">Connecting…</span>
+  <form id="evaluate" hidden>
+    <select id="evaluate-mode" aria-label="Evaluation mode">
+      <option value="agent">agent</option>
+      <option value="inspectedWindow">inspectedWindow.eval</option>
+    </select>
+    <input id="expression" type="text" placeholder="Expression, evaluated in the page (gramlot, node, value)" aria-label="Expression">
+    <button type="submit">Evaluate</button>
+    <output id="result" aria-live="polite"></output>
+  </form>
+</div>
+<div id="inspector" hidden></div>
+<script type="module" src="panel.js"></script>
+</body>
+</html>

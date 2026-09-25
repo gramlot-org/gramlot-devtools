@@ -1,0 +1,13 @@
+/* Copyright 2026 Softwell S.r.l. - SPDX-License-Identifier: Apache-2.0 */
+:root { color-scheme: light dark; font: 12px system-ui, sans-serif; }
+html, body { margin: 0; height: 100%; }
+body { display: flex; flex-direction: column; background: Canvas; color: CanvasText; }
+#status { padding: 4px 8px; border-bottom: 1px solid color-mix(in srgb, CanvasText 15%, transparent); display: flex; gap: 12px; align-items: center; }
+#status[data-state="none"] #message { font-weight: 600; }
+#status form { display: flex; gap: 4px; margin-left: auto; }
+#status input { width: 22em; font: inherit; }
+#result { font-family: ui-monospace, monospace; max-width: 30em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#result[data-error="true"] { color: #c62828; }
+#inspector { flex: 1; position: relative; min-height: 0; }
+#inspector[hidden] { display: none; }
+.gramlot-devtools-inspector { height: 100%; }
