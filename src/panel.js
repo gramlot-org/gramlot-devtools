@@ -11,12 +11,12 @@
  * frames that hold a Gramlot instance and inspects one at a time.
  *
  * Outside DevTools (automated tests) the page can be opened as
- * panel.html?tabId=N: then `inspectedWindow.eval` is not available.
+ * panel.html?tabId=N.
  */
 import {Bag} from 'genro-bag-js';
 import {fromTytx} from 'genro-tytx';
 import {BAG_CLASSES} from './panel-bags.js';
-import {ROOTS, message, nextId, isMessage, encodeValue, encodeAttrs, decodeValue, applyChange} from './protocol.js';
+import {ROOTS, message, nextId, isMessage, encodeValue, encodeAttrs, applyChange} from './protocol.js';
 import {mountPanelInspector} from './inspector/panel-inspector.js';
 import recipe from './inspector/inspector-embedded.tytx';
 
@@ -27,13 +27,6 @@ const statusBar = document.getElementById('status');
 const messageLine = document.getElementById('message');
 const inspectorHost = document.getElementById('inspector');
 const frameSelect = document.getElementById('frame');
-const evaluateForm = document.getElementById('evaluate');
-const expressionInput = document.getElementById('expression');
-const resultLine = document.getElementById('result');
-// inspectedWindow.eval, which the page CSP does not block. Outside DevTools
-// only the agent mode exists. The agent mode stays reachable from the panel
-// console: gramlotDevtools.evaluate(expression, 'agent').
-const EVALUATE_MODE = devtools ? 'inspectedWindow' : 'agent';
 
 // frames: frameId -> {url, instance: {instanceId, pageId} | null}.
 // frameId/instanceId: the inspected frame and its instance.
@@ -53,7 +46,6 @@ function show(kind, text) {
     messageLine.hidden = connected;
     statusBar.title = connected ? text : '';
     inspectorHost.hidden = !connected;
-    evaluateForm.hidden = !connected;
     renderFrames();
 }
 
@@ -85,6 +77,8 @@ function frameLabel(frameId) {
 function renderFrames() {
     const withInstance = [...state.frames].filter(([, frame]) => frame.instance);
     frameSelect.hidden = withInstance.length < 2;
+    // Nothing to show: no bar at all.
+    statusBar.hidden = messageLine.hidden && frameSelect.hidden;
     frameSelect.replaceChildren(...withInstance.map(([frameId, frame]) => {
         const option = document.createElement('option');
         option.value = String(frameId);
@@ -264,57 +258,6 @@ function connect() {
     });
     port.postMessage({control: 'attach', tabId});
 }
-
-function formatResult(result) {
-    if (!result.ok) return {text: result.error, error: true};
-    if (result.text !== undefined) return {text: result.text, error: false};
-    const value = decodeValue(BAG_CLASSES, result);
-    if (value instanceof Bag) return {text: `Bag (${value.len ?? [...value].length} nodes)`, error: false};
-    if (value instanceof Date) return {text: `${value.toISOString()} (date)`, error: false};
-    const type = value === null ? 'null' : typeof value === 'object' ? (value.constructor?.name || 'object') : typeof value;
-    return {text: `${type === 'string' ? JSON.stringify(value) : String(value)} (${type})`, error: false};
-}
-
-/** Evaluate through chrome.devtools.inspectedWindow.eval: DevTools evaluates in the page. */
-function evaluateInspectedWindow(expression, root, nodePath) {
-    const node = nodePath ? `gramlot[${JSON.stringify(root)}].getNode(${JSON.stringify(nodePath)})` : 'null';
-    const code = `(() => {
-        const gramlot = window.gramlot;
-        if (!gramlot) throw new Error('No Gramlot instance');
-        const node = ${node};
-        const value = node ? node.staticValue : undefined;
-        const result = (function (gramlot, node, value) { "use strict"; return (${expression}); })(gramlot, node, value);
-        const Bag = gramlot.data.constructor;
-        if (result instanceof Bag) return {tytxValue: result.toTytx('json'), bag: result.constructor.tytxSuffix || 'X'};
-        try { const wrapper = new Bag(); wrapper.setItem('v', result); return {tytxValue: wrapper.toTytx('json')}; }
-        catch (error) { return {text: String(result)}; }
-    })()`;
-    return new Promise((resolve) => {
-        const frameUrl = state.frameId ? state.frames.get(state.frameId).url : undefined;
-        devtools.inspectedWindow.eval(code, frameUrl ? {frameURL: frameUrl} : {}, (value, exception) => {
-            if (exception?.isException) resolve({ok: false, error: String(exception.value)});
-            else if (exception?.isError) resolve({ok: false, error: `${exception.code}: ${exception.description}`});
-            else resolve({ok: true, ...value});
-        });
-    });
-}
-
-async function evaluate(expression, mode = EVALUATE_MODE) {
-    const nodePath = tool.app.builder.data.getItem('dataPath') || undefined;
-    const payload = {instanceId: state.instanceId, root: 'data', nodePath, expression};
-    const result = mode === 'inspectedWindow'
-        ? await evaluateInspectedWindow(expression, 'data', nodePath)
-        : await request('evaluate', payload);
-    const shown = formatResult(result);
-    resultLine.textContent = shown.text;
-    resultLine.dataset.error = String(shown.error);
-    return {result, shown};
-}
-state.evaluate = evaluate;
-evaluateForm.addEventListener('submit', (event) => {
-    event.preventDefault();
-    if (expressionInput.value.trim()) evaluate(expressionInput.value);
-});
 
 show('waiting', 'Connecting to the page…');
 connect();

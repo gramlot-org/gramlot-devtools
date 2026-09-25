@@ -10,7 +10,7 @@
  * session announced by the last `connect`.
  */
 import {
-    ROOTS, isMessage, message, encodeValue, decodeValue, encodeAttrs, decodeAttrs, changesFromEvent,
+    ROOTS, isMessage, message, decodeValue, encodeAttrs, decodeAttrs, changesFromEvent,
 } from './protocol.js';
 
 const KEY = Symbol.for('gramlot-devtools.agent');
@@ -91,19 +91,6 @@ function install() {
         }
         return found;
     };
-    const evaluate = (payload) => {
-        const gramlot = tracked ? tracked.gramlot : window.gramlot;
-        const root = payload.root || 'data';
-        const node = payload.nodePath ? gramlot[root].getNode(payload.nodePath) : null;
-        // Runs in the page, so the page CSP applies: without 'unsafe-eval'
-        // this throws EvalError, reported in the result.
-        const fn = new Function('gramlot', 'node', 'value', `"use strict"; return (${payload.expression});`);
-        return fn(gramlot, node, node ? node.staticValue : undefined);
-    };
-    const encodeResult = (value) => {
-        try { return encodeValue(BagClass(), value); }
-        catch { return {text: String(value)}; }
-    };
     const handle = (msg) => {
         const p = msg.payload || {};
         switch (msg.type) {
@@ -137,7 +124,6 @@ function install() {
                 node.setAttr(next, true, false, false);
                 return;
             }
-            case 'evaluate': return encodeResult(evaluate(p));
             default: throw new Error(`Unknown message type: ${msg.type}`);
         }
     };

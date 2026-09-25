@@ -177,13 +177,6 @@ try {
         assert.equal(result.ok, false);
         assert.match(result.error, /No node at data:missing.node/);
     });
-    await check('criterion 7 (agent mode): evaluate returns a value computed in the page', async () => {
-        const out = await panel.evaluate(() => window.gramlotDevtools.evaluate('gramlot.data.getItem("customer.name") + " / " + (6 * 7)', 'agent'));
-        assert.equal(out.result.ok, true, out.result.error);
-        assert.equal(out.shown.text, '"Grace / 42" (string)');
-        const typed = await panel.evaluate(() => window.gramlotDevtools.evaluate('gramlot.data.getItem("customer.born")', 'agent'));
-        assert.equal(typed.shown.text, '1815-12-10T00:00:00.000Z (date)');
-    });
     await check('criterion 6: page reload reconnects the panel with a new snapshot', async () => {
         const before = await panel.evaluate(() => window.gramlotDevtools.log.filter(t => t === 'hello').length);
         await page.reload();
@@ -266,21 +259,17 @@ try {
         await editRow('data', 'customer.name', 'value', 'Edited in frame');
         await second.waitForFunction(() => gramlot.data.getItem('customer.name') === 'Edited in frame', null, {timeout: 3000});
         assert.equal(await frameOf('first').evaluate(() => gramlot.data.getItem('customer.name')), 'Ada');
-        const out = await panel.evaluate(() => window.gramlotDevtools.evaluate('location.search', 'agent'));
-        assert.equal(out.shown.text, '"?frame=second" (string)');
         await second.evaluate(() => gramlot.data.setItem('live', 1));
         await panel.waitForFunction(() => window.panelScopes.data.bag.getItem('live') === 1, null, {timeout: 3000});
     });
-    await check('strict page CSP: agent-mode evaluate fails with EvalError, reported', async () => {
+    await check('strict page CSP: the panel connects and the copies equal the page', async () => {
         await page.goto(`${ORIGIN}/csp.html`);
         await page.waitForFunction(() => window.gramlot?.state === 'started');
-        await panel.waitForFunction(() => document.getElementById('status').dataset.state === 'connected', null, {timeout: 10000});
-        const out = await panel.evaluate(() => window.gramlotDevtools.evaluate('1 + 2', 'agent'));
-        assert.equal(out.result.ok, false);
-        assert.match(out.result.error, /EvalError/);
-        // The CSP report of this refused evaluation is an expected console error.
-        const index = errors.findIndex(line => line.includes('unsafe-eval'));
-        if (index >= 0) errors.splice(index, 1);
+        await panel.waitForFunction(() => document.getElementById('status').dataset.state === 'connected'
+            && window.panelScopes.source.bag.getNode('main'), null, {timeout: 10000});
+        const {pageWire, copyWire} = await same();
+        assert.equal(copyWire.data, pageWire.data);
+        assert.equal(copyWire.source, pageWire.source);
     });
     await check('closing the panel unsubscribes and removes the agent from the page', async () => {
         await page.goto(`${ORIGIN}/index.html`);

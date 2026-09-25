@@ -86,7 +86,6 @@ const check = async (name, fn) => {
     catch (error) { results.push(['FAIL', name, error.message.split('\n')[0]]); }
 };
 const errors = [];
-const expectedErrors = [];
 
 const context = await chromium.launchPersistentContext('', {
     headless: true, channel: 'chromium',
@@ -144,13 +143,6 @@ try {
         await page.evaluate(() => gramlot.data.setItem('a.b', 1));
         await panel.until(`gramlotDevtools.tool.scopes.data.bag.getItem('a.b') === 1`, 3000);
     });
-    const evaluate = mode => panel.evaluate(`gramlotDevtools.evaluate('gramlot.data.getItem("customer.name") + " " + (6 * 7)', '${mode}').then(r => r.shown)`);
-    await check('criterion 7: evaluate through the agent', async () => {
-        assert.deepEqual(await evaluate('agent'), {text: '"Ada 42" (string)', error: false});
-    });
-    await check('criterion 7: evaluate through inspectedWindow.eval', async () => {
-        assert.deepEqual(await evaluate('inspectedWindow'), {text: '"Ada 42" (string)', error: false});
-    });
     await check('criterion 6: page reload reconnects the DevTools panel', async () => {
         const hellos = await panel.evaluate(`gramlotDevtools.log.filter(t => t === 'hello').length`);
         await page.reload();
@@ -159,17 +151,13 @@ try {
             && gramlotDevtools.tool.scopes.data.bag.getItem('a') === null`);
         await same();
     });
-    await check('strict page CSP: agent mode fails, inspectedWindow.eval works', async () => {
+    await check('strict page CSP: the DevTools panel connects and the copies equal the page', async () => {
         await page.goto(`${ORIGIN}/csp.html`);
         await page.waitForFunction(() => window.gramlot?.state === 'started');
         await panel.until(`document.getElementById('status').dataset.state === 'connected' && (${snapshotsDone})`);
-        const agent = await evaluate('agent');
-        assert.equal(agent.error, true);
-        assert.match(agent.text, /EvalError/);
-        expectedErrors.push(...errors.splice(0).filter(line => line.includes('unsafe-eval')));
-        assert.deepEqual(await evaluate('inspectedWindow'), {text: '"Ada 42" (string)', error: false});
+        await same();
     });
-    await check('iframes: inspectedWindow.eval runs in the inspected frame', async () => {
+    await check('iframes: the DevTools panel inspects the frame chosen in the selector', async () => {
         await page.goto(`${ORIGIN}/frames.html`);
         await panel.until(`document.getElementById('frame').options.length === 2 && (${snapshotsDone})`);
         await panel.evaluate(`(() => {
@@ -178,10 +166,11 @@ try {
             select.dispatchEvent(new Event('change'));
         })()`);
         await panel.until(`gramlotDevtools.frames.get(gramlotDevtools.frameId)?.url.includes('frame=second') && (${snapshotsDone})`);
-        const shown = await panel.evaluate(`gramlotDevtools.evaluate('location.search', 'inspectedWindow').then(r => r.shown)`);
-        assert.deepEqual(shown, {text: '"?frame=second" (string)', error: false});
+        const second = page.frames().find(f => f.url().includes('frame=second'));
+        const pageWire = await second.evaluate(() => gramlot.data.toTytx('json'));
+        assert.equal(await panel.evaluate(`gramlotDevtools.tool.scopes.data.bag.toTytx('json')`), pageWire);
     });
-    await check('criterion 8: no console errors in page or panel (except the expected CSP refusal)', async () => {
+    await check('criterion 8: no console errors in page or panel', async () => {
         assert.deepEqual(errors, []);
     });
     await check('closing DevTools removes the agent and its subscriptions from the page', async () => {
@@ -208,5 +197,4 @@ try {
     server.close();
 }
 for (const [status, name, detail] of results) console.log(`${status}  ${name}${detail ? `\n      ${detail}` : ''}`);
-if (expectedErrors.length) console.log(`expected console lines: ${expectedErrors.length} (page CSP refusing eval)`);
 process.exitCode = results.some(([status]) => status === 'FAIL') ? 1 : 0;

@@ -11,12 +11,7 @@ body { display: flex; flex-direction: column; background: Canvas; color: CanvasT
   --tab-active-color: #111827; --tab-active-weight: 700;
   --tab-font-size: 13px; --tab-padding: 7px 16px;
 }
-#status form { display: flex; gap: 4px; margin-left: auto; }
-#status input { width: 22em; font: inherit; }
-#status button { font: inherit; padding: 1px 8px; }
-#message[hidden] { display: none; }
-#result { font-family: ui-monospace, monospace; max-width: 30em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#result[data-error="true"] { color: #c62828; }
+#message[hidden], #status[hidden] { display: none; }
 #inspector { flex: 1; position: relative; min-height: 0; }
 #inspector[hidden] { display: none; }
 .gramlot-devtools-inspector { height: 100%; }

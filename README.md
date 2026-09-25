@@ -19,8 +19,9 @@ injected by the extension while the panel is open.
   (`getNode`, `subscribe`, `unsubscribe`, `toTytx`, `fromTytx`,
   `node.setAttr`, `node.setValue`).
 - Chrome only.
-- Evaluations about the inspected page run in the page. The panel runs no page
-  code and uses no `eval`/`new Function` (forbidden in MV3 extension pages).
+- The panel runs no page code and uses no `eval`/`new Function` (forbidden in
+  MV3 extension pages). The agent evaluates no code either. The owner removed
+  the `evaluate` command: the DevTools Console already evaluates in the page.
 - It replaces option A (bundle injected by a bookmarklet).
 
 ## Build
@@ -170,7 +171,6 @@ Panel → page:
 | `setValue` | `{requestId, instanceId, root, path, tytxValue}` → `node.setValue` |
 | `setAttributes` | `{requestId, instanceId, root, path, attrs}` → `node.setAttr(attrs, true, true, false)` |
 | `deleteAttribute` | `{requestId, instanceId, root, path, name}` → `node.setAttr(rest, true, false, false)` |
-| `evaluate` | `{requestId, instanceId, root?, nodePath?, expression}` |
 
 Transport-level messages: `connect {session}` (content → agent) and
 `disconnect` (content → agent). Background ↔ panel/content use control
@@ -187,22 +187,6 @@ frame id and instance id.
 
 `deleteAttribute` replaces the attribute set, because `node.delAttr()` emits
 no event. A command with `requestId` always gets a `result`.
-
-### evaluate
-
-The expression is evaluated in the page as
-`(gramlot, node, value) => (expression)`, where `node` is the Data node at
-`nodePath` (the node selected in the Data tree) and `value` its static value.
-Two modes exist. The panel form uses `inspectedWindow.eval` in DevTools and
-`agent` outside DevTools; the agent mode stays reachable from the panel
-console with `gramlotDevtools.evaluate(expression, 'agent')`:
-
-- `agent`: the agent evaluates with `new Function` in the page. The page CSP
-  applies: under `script-src 'self'` it fails with `EvalError`.
-- `inspectedWindow.eval`: `chrome.devtools.inspectedWindow.eval`. DevTools
-  evaluates in the page; the page CSP does not block it. In a sub-frame it
-  runs with the `frameURL` option set to that frame's URL. Default choice is
-  documented in FINALDOC.md.
 
 ## Tests
 
@@ -224,11 +208,9 @@ versions.
 ## Known limits
 
 - One instance per frame: `window.gramlot` of each frame.
-- `inspectedWindow.eval` selects a sub-frame by URL: with two frames at the
-  same URL it can run in the wrong one. The agent mode has no such limit.
 - The copy is rebuilt from a new snapshot when a change cannot be applied.
 - Values that TYTX cannot encode (for example functions) make the snapshot
-  fail; the panel shows the error. Evaluate results fall back to `String()`.
+  fail; the panel shows the error.
 - Nodes with resolvers: the agent does not resolve them; what the snapshot
   contains is what `Bag.toTytx` produces for them.
 - After a committed edit the editor reloads the node when the change comes
@@ -242,5 +224,6 @@ versions.
   file URLs**. On other origins the injection fails and the panel shows the
   error; iframes from other origins are not inspected. The extension injects
   only while its panel is open for that tab.
-- The status bar and the evaluate form of the panel are plain HTML and DOM
-  code, not Gramlot/PoC Source.
+- The status bar of the panel is plain HTML and DOM code, not Gramlot/PoC
+  Source. It is hidden when there is nothing to show (one instance,
+  connected).
