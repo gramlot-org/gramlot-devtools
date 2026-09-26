@@ -241,8 +241,11 @@ Owner decisions:
 Headless checks in `tests/e2e.mjs`: dialog from the row action, console
 mode, exact path, condition on the value, attribute change, removal, Source
 breakpoint, survival across a reload, editor line, debugger mode (CDP
-`Debugger.paused` with `breakpointHit` in the stack), strict CSP. Not yet
-verified in the owner's Chrome.
+`Debugger.paused` with `breakpointHit` in the stack), strict CSP.
+
+Owner's Chrome, 2026-09-26: Console breakpoint on
+`customer.orders.o1.total` with condition `value > 78` logs for 80 and not
+for 50. Passed.
 
 ## Next work (agreed order)
 
