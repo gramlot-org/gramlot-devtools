@@ -11,7 +11,20 @@ body { display: flex; flex-direction: column; background: Canvas; color: CanvasT
   --tab-active-color: #111827; --tab-active-weight: 700;
   --tab-font-size: 13px; --tab-padding: 7px 16px;
 }
-#message[hidden], #status[hidden] { display: none; }
+#message[hidden], #status[hidden], #breakpoints[hidden] { display: none; }
+#breakpoints { margin-left: auto; font: inherit; padding: 1px 8px; }
+#breakpoints[data-error="true"] { color: #c62828; }
+dialog { font: inherit; min-width: 28em; border: 1px solid color-mix(in srgb, CanvasText 25%, transparent); border-radius: 6px; }
+dialog label { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+dialog input[type="text"] { flex: 1; font: inherit; }
+dialog menu { display: flex; justify-content: flex-end; gap: 6px; padding: 0; margin: 10px 0 0; }
+.dialog-title { font-weight: 600; margin: 0 0 8px; }
+.dialog-hint { color: GrayText; margin: 4px 0; }
+#breakpoint-items { list-style: none; padding: 0; margin: 0; }
+#breakpoint-items li { display: flex; gap: 8px; align-items: center; padding: 3px 0; }
+#breakpoint-items .where { font-family: ui-monospace, monospace; }
+#breakpoint-items .error { color: #c62828; }
+#breakpoint-items li > button:first-of-type { margin-left: auto; }
 #inspector { flex: 1; position: relative; min-height: 0; }
 #inspector[hidden] { display: none; }
 .gramlot-devtools-inspector { height: 100%; }

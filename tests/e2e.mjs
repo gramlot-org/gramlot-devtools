@@ -204,6 +204,77 @@ try {
         await panel.waitForFunction(() => window.panelScopes.data.bag.getItem('afterRestart') === 1, null, {timeout: 3000});
         await page.evaluate(() => gramlot.data.delItem('afterRestart'));
     });
+    // Breakpoints (legacy genro._debugPaths): console lines of the page.
+    const logs = [];
+    page.on('console', msg => { if (msg.text().startsWith('** Gramlot breakpoint **')) logs.push(msg.text()); });
+    const hitsAfter = async (action, expected) => {
+        const before = logs.length;
+        await page.evaluate(action);
+        await new Promise(resolve => setTimeout(resolve, 150));
+        assert.equal(logs.length - before, expected, logs.slice(before).join(' | '));
+    };
+    await check('breakpoint from the row action and dialog: console mode logs a Data change', async () => {
+        await selectTab('data');
+        await panel.evaluate(() => {
+            const tree = document.querySelector('[data-inspector="data"]');
+            const row = [...tree.shadowRoot.querySelectorAll('summary, .leaf')].find(r => r.querySelector('.caption')?.textContent === 'customer');
+            row.querySelector('[data-action="breakpoint"]').click();
+        });
+        assert.equal(await panel.evaluate(() => document.getElementById('breakpoint-dialog').open), true);
+        assert.equal(await panel.evaluate(() => document.getElementById('breakpoint-where').textContent), 'data: customer');
+        await panel.evaluate(() => {
+            const dialog = document.getElementById('breakpoint-dialog');
+            dialog.querySelector('form').elements.mode.value = 'console';
+            dialog.close('ok');
+        });
+        await panel.waitForFunction(() => document.getElementById('breakpoints').textContent === '1 breakpoint', null, {timeout: 3000});
+        await hitsAfter(() => gramlot.data.setItem('customer', 'replaced'), 1);
+        await panel.evaluate(() => window.gramlotDevtools.setBreakpoint('data', 'customer', ''));
+    });
+    await check('breakpoint: exact path, condition on the value, attribute change, removal', async () => {
+        await page.reload();
+        await page.waitForFunction(() => window.gramlot?.state === 'started');
+        await panel.waitForFunction(() => window.panelScopes.data.bag.getItem('customer.name') === 'Ada', null, {timeout: 10000});
+        await panel.evaluate(() => window.gramlotDevtools.setBreakpoint('data', 'customer.orders.o1.total', 'console', 'value > 78'));
+        await hitsAfter(() => gramlot.data.setItem('customer.orders.o1.total', 50), 0);
+        await hitsAfter(() => gramlot.data.setItem('customer.orders.o1.total', 80), 1);
+        await hitsAfter(() => gramlot.data.setItem('customer.orders.o2.total', 99), 0);
+        await panel.evaluate(() => window.gramlotDevtools.setBreakpoint('data', 'customer.orders.o1.total', 'console',
+            "evt === 'upd_attrs' && node.attr.currency === 'USD'"));
+        await hitsAfter(() => gramlot.data.getNode('customer.orders.o1.total').setAttr({currency: 'USD'}), 1);
+        await panel.evaluate(() => window.gramlotDevtools.setBreakpoint('data', 'customer.orders.o1.total', ''));
+        await hitsAfter(() => gramlot.data.setItem('customer.orders.o1.total', 90), 0);
+    });
+    await check('breakpoint on a Source node; it survives a page reload; editor line shows it', async () => {
+        await panel.evaluate(() => window.gramlotDevtools.setBreakpoint('source', 'main.div_0', 'console'));
+        await page.reload();
+        await page.waitForFunction(() => window.gramlot?.state === 'started');
+        await panel.waitForFunction(() => window.panelScopes.source.bag.getNode('main.div_0'), null, {timeout: 10000});
+        await new Promise(resolve => setTimeout(resolve, 200));
+        await hitsAfter(() => gramlot.source.getNode('main.div_0').setAttr({class: 'y'}), 1);
+        await selectTab('source');
+        await panel.evaluate(() => { const tool = window.gramlotDevtools.tool; tool.app.live(() => tool.app.builder.data.setItem('sourcePath', 'main.div_0')); });
+        const line = await panel.evaluate(() => {
+            const el = document.querySelector('[data-inspector="source-editor"] [data-field="rows"]').shadowRoot.querySelector('[data-breakpoint-line]');
+            return el.hidden ? null : el.textContent;
+        });
+        assert.equal(line, 'Breakpoint: Console');
+        await panel.evaluate(() => window.gramlotDevtools.setBreakpoint('source', 'main.div_0', ''));
+    });
+    await check('breakpoint in debugger mode pauses the page in the debugger', async () => {
+        const cdp = await context.newCDPSession(page);
+        await cdp.send('Debugger.enable');
+        const paused = new Promise(resolve => cdp.once('Debugger.paused', resolve));
+        await panel.evaluate(() => window.gramlotDevtools.setBreakpoint('data', 'customer.name', 'debugger'));
+        const write = page.evaluate(() => gramlot.data.setItem('customer.name', 'Paused'));
+        const event = await paused;
+        const frames = event.callFrames.map(f => f.functionName);
+        await cdp.send('Debugger.resume');
+        await write;
+        await cdp.detach();
+        assert.ok(frames.includes('breakpointHit'), frames.join(' < '));
+        await panel.evaluate(() => window.gramlotDevtools.setBreakpoint('data', 'customer.name', ''));
+    });
     await check('criterion 9: the page loads no PoC runtime (network requests)', async () => {
         const own = requests.filter(url => url.startsWith(ORIGIN)).map(url => new URL(url).pathname);
         assert.deepEqual([...new Set(own)].sort(), ['/index.html', '/page.js', '/vendor/gramlot.js']);
@@ -270,6 +341,17 @@ try {
         const {pageWire, copyWire} = await same();
         assert.equal(copyWire.data, pageWire.data);
         assert.equal(copyWire.source, pageWire.source);
+    });
+    await check('strict page CSP: a breakpoint condition is refused and reported; no condition works', async () => {
+        await panel.evaluate(() => window.gramlotDevtools.setBreakpoint('data', 'customer.name', 'console', 'value === 1'));
+        const error = await panel.evaluate(() => window.gramlotDevtools.breakpoints.get('data:customer.name').error);
+        assert.match(error, /EvalError/);
+        assert.equal(await panel.evaluate(() => document.getElementById('breakpoints').dataset.error), 'true');
+        // The CSP report of this refused compilation is an expected console error.
+        for (let index; (index = errors.findIndex(line => line.includes('unsafe-eval'))) >= 0;) errors.splice(index, 1);
+        await panel.evaluate(() => window.gramlotDevtools.setBreakpoint('data', 'customer.name', 'console'));
+        await hitsAfter(() => gramlot.data.setItem('customer.name', 'CSP'), 1);
+        await panel.evaluate(() => window.gramlotDevtools.setBreakpoint('data', 'customer.name', ''));
     });
     await check('closing the panel unsubscribes and removes the agent from the page', async () => {
         await page.goto(`${ORIGIN}/index.html`);

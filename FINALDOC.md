@@ -218,13 +218,35 @@ See README "Known limits". Main ones:
 | `bc3086c` | Reconnect after a back/forward cache restore: the content script closes its port on `pagehide` (persisted) and opens a new one on `pageshow`. Headless missed it because Playwright disables the cache; the browser tests now enable it | Owner's Chrome |
 | `4262876` | `evaluate` removed | Owner decision |
 
+## Breakpoints (2026-09-26)
+
+Owner request: imitate the GenroPy legacy data breakpoints. Legacy
+reference, local checkout `Genropy/genropy` at `fa35e5adfa`:
+`gnrjs/gnr_d11/js/genro_dev.js:342-355` (prompt with Mode D/C and
+Condition), `genro.js:138-144` (`setDebugPath`), `genro.js:1601-1611`
+(`dataTrigger`: exact path, `funcApply('return ' + condition, kw)`,
+`debugger` or `console.log`). Details in README "Breakpoints".
+
+Owner decisions:
+
+- The condition is free JavaScript, compiled by the agent in the page (not
+  in the panel), as in the legacy. Under a strict page CSP a condition is
+  refused and reported; breakpoints without a condition work.
+- Opening the dialog: a `●` row action instead of a double click (a double
+  click opens and closes a branch row of the PoC tree).
+- Active breakpoints show in the editor line of the selected node and in the
+  status bar list; no mark in the tree rows (it would need an adapted copy of
+  `storetree.js`; possible later).
+
+Headless checks in `tests/e2e.mjs`: dialog from the row action, console
+mode, exact path, condition on the value, attribute change, removal, Source
+breakpoint, survival across a reload, editor line, debugger mode (CDP
+`Debugger.paused` with `breakpointHit` in the stack), strict CSP. Not yet
+verified in the owner's Chrome.
+
 ## Next work (agreed order)
 
-1. Watches on a Data or Source path: value or attribute, structured
-   conditions (`>`, `>=`, `<`, `<=`, `==`, `!=`, contains, any change),
-   action `log` or `break` (`debugger` in the agent), kept by the panel and
-   sent again at every `hello`. No eval.
-2. Source ↔ DOM through `gramlot.renderer`: "Reveal in Elements", selection
+1. Source ↔ DOM through `gramlot.renderer`: "Reveal in Elements", selection
    from Elements to the Source tree, a "Gramlot" sidebar pane in Elements.
-3. Tests: watch the DevTools frontend console and the service worker
+2. Tests: watch the DevTools frontend console and the service worker
    console in `tests/devtools.mjs`.

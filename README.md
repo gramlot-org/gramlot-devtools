@@ -171,6 +171,7 @@ Panel → page:
 | `setValue` | `{requestId, instanceId, root, path, tytxValue}` → `node.setValue` |
 | `setAttributes` | `{requestId, instanceId, root, path, attrs}` → `node.setAttr(attrs, true, true, false)` |
 | `deleteAttribute` | `{requestId, instanceId, root, path, name}` → `node.setAttr(rest, true, false, false)` |
+| `setBreakpoints` | `{requestId, instanceId, breakpoints: [{root, path, mode: 'debugger'\|'console', condition}]}` replaces the whole set; `result.errors` maps `root:path` to a compile error |
 
 Transport-level messages: `connect {session}` (content → agent) and
 `disconnect` (content → agent). Background ↔ panel/content use control
@@ -187,6 +188,37 @@ frame id and instance id.
 
 `deleteAttribute` replaces the attribute set, because `node.delAttr()` emits
 no event. A command with `requestId` always gets a `result`.
+
+## Breakpoints
+
+An imitation of the GenroPy legacy data breakpoints (`genro_dev.js`
+`handleDebugPath`, `genro.js` `setDebugPath` and `dataTrigger`), extended to
+the Source.
+
+- Setting: hover a tree row, click `●` (row action of the PoC tree). The
+  dialog asks for **Mode** (Debugger, Console, None to remove) and an
+  optional **Condition**. A double click is not used: on a branch it opens
+  and closes the `<details>` row.
+- Match: the exact path of the changed node, for every event (`upd_value`,
+  `upd_attrs`, `upd_value_attr`, `ins`, `del`). A change of a value or of an
+  attribute is told apart in the condition (`evt`, `attrs_diff`).
+- Condition: a JavaScript expression over `evt`, `node`, `value`,
+  `oldvalue`, `attrs_diff`, `reason`, `path`. The agent compiles it with
+  `new Function` in the page (the legacy used `funcApply`); the panel
+  evaluates nothing. Under a page CSP without `'unsafe-eval'` the compilation
+  is refused: the panel shows the error and the breakpoint does not fire.
+  Breakpoints without a condition always work.
+- Action: **Debugger** runs `debugger` in the agent (`breakpointHit`); the
+  caller of `setItem`/`setAttr` is lower in the call stack. **Console** logs
+  `** Gramlot breakpoint **` with root, path, event and reason in the page
+  console.
+- The panel keeps the breakpoints and sends the whole set to the inspected
+  instance after every `hello`, so they survive reloads, back/forward cache
+  restores and frame changes.
+- Where they show: the editor line above the properties of the selected
+  node, and the `N breakpoints` button in the status bar, which opens the
+  list (Edit, Remove). The tree rows carry no mark: the PoC tree has no API
+  for per-row marks.
 
 ## Tests
 

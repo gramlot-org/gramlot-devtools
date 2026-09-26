@@ -27,10 +27,17 @@ const statusBar = document.getElementById('status');
 const messageLine = document.getElementById('message');
 const inspectorHost = document.getElementById('inspector');
 const frameSelect = document.getElementById('frame');
+const breakpointsButton = document.getElementById('breakpoints');
+const breakpointDialog = document.getElementById('breakpoint-dialog');
+const breakpointList = document.getElementById('breakpoint-list');
 
 // frames: frameId -> {url, instance: {instanceId, pageId} | null}.
 // frameId/instanceId: the inspected frame and its instance.
-const state = {frames: new Map(), frameId: null, instanceId: null, pageId: null, pending: new Map(), log: [], violations: []};
+// breakpoints: `${root}:${path}` -> {root, path, mode, condition, error}. They
+// belong to the panel and are sent to the inspected instance (legacy
+// genro._debugPaths), so they survive reloads and frame changes.
+const state = {frames: new Map(), frameId: null, instanceId: null, pageId: null, pending: new Map(), log: [], violations: [],
+    breakpoints: new Map()};
 // Diagnostics for manual and automated verification; read-only use.
 globalThis.gramlotDevtools = state;
 // The extension CSP forbids eval/new Function: any attempt is recorded here.
@@ -73,12 +80,16 @@ function frameLabel(frameId) {
     return frameId === 0 ? `${title} (top)` : title;
 }
 
+/** Nothing to show: no bar at all. */
+function renderStatusBar() {
+    statusBar.hidden = messageLine.hidden && frameSelect.hidden && breakpointsButton.hidden;
+}
+
 /** Frame selector: shown only when more than one frame holds an instance. */
 function renderFrames() {
     const withInstance = [...state.frames].filter(([, frame]) => frame.instance);
     frameSelect.hidden = withInstance.length < 2;
-    // Nothing to show: no bar at all.
-    statusBar.hidden = messageLine.hidden && frameSelect.hidden;
+    renderStatusBar();
     frameSelect.replaceChildren(...withInstance.map(([frameId, frame]) => {
         const option = document.createElement('option');
         option.value = String(frameId);
@@ -159,6 +170,7 @@ function select(frameId) {
     show('connected', `Gramlot instance ${instance.instanceId}` + (instance.pageId ? ` · page ${instance.pageId}` : '')
         + (frameId === 0 ? '' : ` · frame ${frameLabel(frameId)}`));
     for (const root of ROOTS) send('subscribe', {instanceId: instance.instanceId, root});
+    sendBreakpoints();
 }
 
 /** Keep the inspected frame if it still has an instance; otherwise pick one, top frame first. */
@@ -258,6 +270,115 @@ function connect() {
     });
     port.postMessage({control: 'attach', tabId});
 }
+
+/** Send the whole breakpoint set to the inspected instance; record compile errors. */
+async function sendBreakpoints() {
+    if (!state.instanceId) { renderBreakpoints(); return; }
+    const breakpoints = [...state.breakpoints.values()].map(({root, path, mode, condition}) => ({root, path, mode, condition}));
+    const result = await request('setBreakpoints', {instanceId: state.instanceId, breakpoints});
+    for (const [key, breakpoint] of state.breakpoints) {
+        breakpoint.error = result.ok ? result.errors?.[key] || null : result.error;
+    }
+    renderBreakpoints();
+}
+
+/** Add, change or (mode '') remove one breakpoint. */
+function setBreakpoint(root, path, mode, condition = '') {
+    const key = `${root}:${path}`;
+    if (!mode) state.breakpoints.delete(key);
+    else state.breakpoints.set(key, {root, path, mode, condition: condition.trim(), error: null});
+    return sendBreakpoints();
+}
+state.setBreakpoint = setBreakpoint;
+
+function describeBreakpoint(breakpoint) {
+    return (breakpoint.mode === 'debugger' ? 'Debugger' : 'Console')
+        + (breakpoint.condition ? ` · if ${breakpoint.condition}` : '');
+}
+
+// Editor line: the breakpoint of the selected node, above the property rows.
+const breakpointLines = {};
+for (const kind of ROOTS) {
+    const scope = tool.scopes[kind];
+    const line = document.createElement('div');
+    line.hidden = true;
+    line.dataset.breakpointLine = kind;
+    line.style.cssText = 'padding:3px 8px;font:11px system-ui,sans-serif;color:#8a1c1c;background:#fdecea;border-bottom:1px solid #f3c7c3';
+    scope.editor.rows.before(line);
+    breakpointLines[kind] = line;
+    tool.app.builder.data.subscribe(`breakpoint-line-${kind}`, {any: () => renderBreakpointLine(kind)});
+    scope.tree.rowActions = [{id: 'breakpoint', icon: '●', label: 'Breakpoint'}];
+    scope.tree.addEventListener('tree-action', (event) => {
+        if (event.detail.action === 'breakpoint') openBreakpointDialog(kind, event.detail.path);
+    });
+}
+
+function renderBreakpointLine(kind) {
+    const breakpoint = state.breakpoints.get(`${kind}:${tool.app.builder.data.getItem(kind + 'Path')}`);
+    breakpointLines[kind].hidden = !breakpoint;
+    if (breakpoint) {
+        breakpointLines[kind].textContent = `Breakpoint: ${describeBreakpoint(breakpoint)}`
+            + (breakpoint.error ? ` · ${breakpoint.error}` : '');
+    }
+}
+
+function renderBreakpoints() {
+    const count = state.breakpoints.size;
+    const failed = [...state.breakpoints.values()].some(breakpoint => breakpoint.error);
+    breakpointsButton.hidden = count === 0;
+    breakpointsButton.textContent = `${count} breakpoint${count === 1 ? '' : 's'}`;
+    breakpointsButton.dataset.error = String(failed);
+    renderStatusBar();
+    for (const kind of ROOTS) renderBreakpointLine(kind);
+    if (breakpointList.open) renderBreakpointList();
+}
+
+function openBreakpointDialog(root, path) {
+    const form = breakpointDialog.querySelector('form');
+    const existing = state.breakpoints.get(`${root}:${path}`);
+    document.getElementById('breakpoint-where').textContent = `${root}: ${path}`;
+    form.elements.mode.value = existing ? existing.mode : 'debugger';
+    form.elements.condition.value = existing ? existing.condition : '';
+    breakpointDialog.dataset.root = root;
+    breakpointDialog.dataset.path = path;
+    breakpointDialog.returnValue = '';
+    breakpointDialog.showModal();
+}
+breakpointDialog.addEventListener('close', () => {
+    if (breakpointDialog.returnValue !== 'ok') return;
+    const form = breakpointDialog.querySelector('form');
+    setBreakpoint(breakpointDialog.dataset.root, breakpointDialog.dataset.path,
+        form.elements.mode.value, form.elements.condition.value);
+});
+
+function renderBreakpointList() {
+    document.getElementById('breakpoint-items').replaceChildren(...[...state.breakpoints.values()].map((breakpoint) => {
+        const item = document.createElement('li');
+        const where = document.createElement('span');
+        where.className = 'where';
+        where.textContent = `${breakpoint.root}: ${breakpoint.path}`;
+        const what = document.createElement('span');
+        what.textContent = describeBreakpoint(breakpoint);
+        item.append(where, what);
+        if (breakpoint.error) {
+            const error = document.createElement('span');
+            error.className = 'error';
+            error.textContent = breakpoint.error;
+            item.append(error);
+        }
+        const edit = document.createElement('button');
+        edit.type = 'button';
+        edit.textContent = 'Edit';
+        edit.addEventListener('click', () => { breakpointList.close(); openBreakpointDialog(breakpoint.root, breakpoint.path); });
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.textContent = 'Remove';
+        remove.addEventListener('click', () => setBreakpoint(breakpoint.root, breakpoint.path, ''));
+        item.append(edit, remove);
+        return item;
+    }));
+}
+breakpointsButton.addEventListener('click', () => { renderBreakpointList(); breakpointList.showModal(); });
 
 show('waiting', 'Connecting to the page…');
 connect();

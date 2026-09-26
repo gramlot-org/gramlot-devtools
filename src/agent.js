@@ -25,6 +25,8 @@ function install() {
     let session = null;
     let tracked = null;           // {instanceId, gramlot}
     const subscriptions = new Map(); // root -> Bag
+    // `${root}:${path}` -> {root, path, mode: 'debugger'|'console', condition, test}
+    const breakpoints = new Map();
     let watcher = null;
 
     const send = (type, payload, id) => {
@@ -52,6 +54,61 @@ function install() {
     const BagClass = () => tracked.gramlot.data.constructor;
     const bagClasses = () => ({X: BagClass(), XS: tracked.gramlot.source.constructor});
 
+    /**
+     * Replace the breakpoint set (legacy genro._debugPaths). A condition is a
+     * JavaScript expression over the event fields; it is compiled here, in the
+     * page, so the page CSP applies to it. Compile errors are returned by key.
+     */
+    const setBreakpoints = (list) => {
+        breakpoints.clear();
+        const errors = {};
+        for (const {root, path, mode, condition} of list) {
+            const key = `${root}:${path}`;
+            let test = null;
+            if (condition) {
+                try {
+                    test = new Function('evt', 'node', 'value', 'oldvalue', 'attrs_diff', 'reason', 'path',
+                        `"use strict"; return (${condition});`);
+                } catch (error) { errors[key] = `${error.name}: ${error.message}`; continue; }
+            }
+            breakpoints.set(key, {root, path, mode, condition, test});
+        }
+        return {errors};
+    };
+    /** Legacy dataTrigger check: exact path, optional condition, then debugger or console. */
+    const checkBreakpoints = (root, event) => {
+        if (!breakpoints.size) return;
+        const pathlist = event.pathlist || [];
+        const structural = event.evt === 'ins' || event.evt === 'del';
+        const nodes = Array.isArray(event.node) ? event.node : [event.node];
+        for (const node of nodes) {
+            const path = structural ? [...pathlist, node.label].join('.') : pathlist.join('.');
+            const breakpoint = breakpoints.get(`${root}:${path}`);
+            if (!breakpoint) continue;
+            const kw = {evt: event.evt, node, value: node.staticValue, oldvalue: event.oldvalue,
+                attrs_diff: event.attrs_diff, reason: event.reason, path};
+            if (breakpoint.test) {
+                let hit;
+                try {
+                    hit = breakpoint.test(kw.evt, kw.node, kw.value, kw.oldvalue, kw.attrs_diff, kw.reason, kw.path);
+                } catch (error) {
+                    console.warn('** Gramlot breakpoint condition failed **', root, path, error);
+                    continue;
+                }
+                if (!hit) continue;
+            }
+            breakpointHit(breakpoint, root, kw);
+        }
+    };
+    /** The caller of setItem/setAttr is in the call stack below this frame. */
+    const breakpointHit = (breakpoint, root, kw) => {
+        if (breakpoint.mode === 'debugger') {
+            debugger; // eslint-disable-line no-debugger
+            return;
+        }
+        console.log('** Gramlot breakpoint **', 'root', root, 'path', kw.path, 'evt', kw.evt, 'reason', kw.reason, kw);
+    };
+
     const unsubscribe = (root) => {
         subscriptions.get(root)?.unsubscribe(SUBSCRIBER, {any: true});
         subscriptions.delete(root);
@@ -66,6 +123,7 @@ function install() {
         catch (error) { send('snapshot', {instanceId, root, error: String(error.message || error)}); return; }
         send('snapshot', {instanceId, root, tytx});
         bag.subscribe(SUBSCRIBER, {any: event => {
+            checkBreakpoints(root, event);
             let changes;
             try { changes = changesFromEvent(Bag, event); }
             catch (error) {
@@ -98,6 +156,7 @@ function install() {
                 session = p.session;
                 tracked = null;
                 unsubscribeAll();
+                breakpoints.clear();
                 if (!announce()) send('hello', {instances: []});
                 clearInterval(watcher);
                 watcher = setInterval(announce, WATCH_MS);
@@ -115,6 +174,9 @@ function install() {
                 node.setAttr(decodeAttrs(BagClass(), p.attrs), true, true, false);
                 return;
             }
+            case 'setBreakpoints':
+                bagOf(p.instanceId, 'data');
+                return setBreakpoints(p.breakpoints || []);
             case 'deleteAttribute': {
                 const node = nodeOf(p);
                 if (!Object.hasOwn(node.attr, p.name)) throw new Error(`No attribute ${p.name} at ${p.path}`);
@@ -145,6 +207,7 @@ function install() {
     const onPageHide = () => { if (tracked) send('bye', {instanceId: tracked.instanceId}); };
     function uninstall() {
         unsubscribeAll();
+        breakpoints.clear();
         clearInterval(watcher);
         watcher = null;
         window.removeEventListener('message', onMessage);
