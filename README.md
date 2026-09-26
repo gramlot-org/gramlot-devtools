@@ -9,6 +9,15 @@ the PoC runtime, vendored in `vendor/gramlot-poc/` until Gramlot is published. I
 receives a small agent (about 9 KB, no Bag or TYTX library, no PoC code),
 injected by the extension while the panel is open.
 
+## Documentation
+
+- Guides: `docs/` (expanded) and `docs_llm/` (concise), namespace GDT, built
+  with Sphinx and the Read the Docs theme (`.readthedocs.yaml`).
+  Build locally: `python scripts/check_docs.py` (see `CONTRIBUTING.md`).
+- Rules for contributors and coding agents: `AGENTS.md`, `CONTRIBUTING.md`.
+  No AI, LLM or assistant references in commits, pull requests, code or
+  documents.
+
 ## Owner interpretation
 
 - This is an external development tool. Gramlot does not import it, depend on
