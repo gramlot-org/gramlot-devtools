@@ -6,8 +6,8 @@
  * Chromium is started with --auto-open-devtools-for-tabs and a remote
  * debugging port. The Gramlot panel is selected through the DevTools
  * frontend (InspectorView.showPanel), then the panel iframe is driven over
- * the Chrome DevTools Protocol. This covers chrome.devtools.panels.create and
- * chrome.devtools.inspectedWindow.eval, which tests/e2e.mjs cannot reach.
+ * the Chrome DevTools Protocol. This covers chrome.devtools.panels.create,
+ * which tests/e2e.mjs cannot reach.
  * The DevTools frontend module path is internal to Chromium and may change.
  */
 import assert from 'node:assert/strict';
@@ -20,8 +20,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const TOOL = join(HERE, '..');
 const EXT = join(TOOL, 'dist');
 const PAGES = join(TOOL, 'test-page');
-const PLAYWRIGHT = process.env.PLAYWRIGHT || '/Users/gporcari/Sviluppo/gramlot/gramlot-rosetta/node_modules/playwright/index.mjs';
-const {chromium} = await import(PLAYWRIGHT);
+import {chromium} from 'playwright';
 const DEBUG_PORT = Number(process.env.DEBUG_PORT || 9335);
 
 const TYPES = {'.html': 'text/html', '.js': 'text/javascript'};

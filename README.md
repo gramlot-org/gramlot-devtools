@@ -1,11 +1,11 @@
-# Gramlot DevTools for Chrome (provisional external tool)
+# Gramlot DevTools for Chrome
 
 A Chrome extension (Manifest V3, loaded unpacked) that adds a **Gramlot**
 panel to Chrome DevTools. The panel shows and edits the **Data Bag** and the
 **Source Bag** of an open Gramlot page.
 
 The panel UI is the gramlot-poc inspector (tree, tabs, property editor) with
-the PoC runtime. It runs outside the page, in the extension. The page only
+the PoC runtime, vendored in `vendor/gramlot-poc/` until Gramlot is published. It runs outside the page, in the extension. The page only
 receives a small agent (about 9 KB, no Bag or TYTX library, no PoC code),
 injected by the extension while the panel is open.
 
@@ -24,31 +24,41 @@ injected by the extension while the panel is open.
   the `evaluate` command: the DevTools Console already evaluates in the page.
 - It replaces option A (bundle injected by a bookmarklet).
 
-## Build
+## Install a release
 
-No global or local npm install. From this folder:
+1. Download `gramlot-devtools-<version>.zip` from the
+   [releases](https://github.com/gramlot-org/gramlot-devtools/releases) and
+   unzip it.
+2. Load the unzipped folder as described in "Load in Chrome".
+
+## Build from source
+
+Node 22 or later. Dependencies are installed locally (`.npmrc` points the
+`@jsr` scope to `npm.jsr.io`):
 
 ```sh
+npm install
+npx playwright install chromium   # only for the browser tests
 node build.mjs
 ```
 
-The script uses existing checkouts, read-only:
+Output: `dist/` (the extension) and `test-page/vendor/gramlot.js` (a copy of
+the Gramlot runtime for the test page). Both are git-ignored.
 
 | Variable | Default | Used for |
 | --- | --- | --- |
-| `GRAMLOT_JS` | `/Users/gporcari/Sviluppo/gramlot/gramlot/js` | esbuild, `@jsr/genro__bag`, `@jsr/genro__tytx`, `dist/gramlot.js` for the test page |
-| `POC_NODE_MODULES` | `<worktree>/js/dom/node_modules`, else `/Users/gporcari/Sviluppo/gramlot/gramlot-poc/js/dom/node_modules` | third-party packages imported by the PoC runtime |
+| `GRAMLOT_RUNTIME` | `../gramlot/js/dist/gramlot.js` (sibling checkout of gramlot-org/gramlot) | test page runtime; skipped with a message when missing |
 
-PoC sources (`js/dom/src`, `js/pages/src/inspector.css`) come from this
-repository. Output: `dist/` (the extension) and `test-page/vendor/gramlot.js`
-(a copy of the Gramlot runtime). Both are git-ignored.
-
-Gramlot's `dist/gramlot.js` must exist; this tool never builds Gramlot.
+- Bag and TYTX: `@jsr/genro__bag` 0.5.3 and `@jsr/genro__tytx` 0.15.1, the
+  versions used by Gramlot, so panel and page share library versions.
+- PoC runtime: `vendor/gramlot-poc/`, an unmodified copy of the modules the
+  panel bundle reaches, from gramlot-poc commit `10478b5`. It is removed when
+  the panel moves to the published Gramlot package. See its README.
 
 ## Load in Chrome
 
 1. `chrome://extensions` → enable **Developer mode**.
-2. **Load unpacked** → select `tools/gramlot-devtools-chrome/dist`.
+2. **Load unpacked** → select `dist/` (or the unzipped release folder).
 3. For pages opened as `file://`: **Details** of the extension → enable
    **Allow access to file URLs**. Chrome requires this switch in addition to
    the `file:///*` host permission.
@@ -58,7 +68,7 @@ Gramlot's `dist/gramlot.js` must exist; this tool never builds Gramlot.
 ## Test page
 
 ```sh
-cd tools/gramlot-devtools-chrome/test-page
+cd test-page
 python3 -m http.server 8765
 ```
 
@@ -128,7 +138,8 @@ DevTools
 | `src/inspector/panel-editor.js` | Adapted copy of `js/pages/src/inspector-editor.js` |
 | `src/inspector/panel-builder.js` | Adapted copy of `js/pages/src/builder.js` |
 | `src/inspector/*.tytx` | Copies of the generated recipes `inspector.tytx` / `inspector-embedded.tytx` |
-| `src/feasibility.*` | Step 1 page: inspector on local Bags in an extension page |
+| `src/feasibility.*` | Step 1 page: inspector on local Bags in an extension page (not in release zips) |
+| `vendor/gramlot-poc/` | Vendored PoC runtime modules and `inspector.css` (temporary) |
 
 ## Protocol (version 1)
 
@@ -231,11 +242,18 @@ node tests/e2e.mjs                    # extension in headless Chromium, panel op
 node tests/devtools.mjs               # panel inside real DevTools, driven over CDP
 ```
 
-The browser tests use an existing Playwright installation
-(`PLAYWRIGHT`, default the gramlot-rosetta checkout) and its Chromium.
+The browser tests use Playwright (development dependency) and its Chromium
+(`npx playwright install chromium`).
 `tests/devtools.mjs` reaches the DevTools frontend through an internal
 module path (`./ui/legacy/legacy.js`), which can change between Chromium
 versions.
+
+## Release
+
+Push a tag `v<version>` matching `version` in `src/manifest.json`. The
+workflow `.github/workflows/release.yml` builds `dist/`, zips it without the
+`feasibility.*` files and attaches `gramlot-devtools-<version>.zip` to a
+GitHub release.
 
 ## Known limits
 

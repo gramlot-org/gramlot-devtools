@@ -1,0 +1,31 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check tag against manifest version
+        run: |
+          version=$(node -p "require('./src/manifest.json').version")
+          test "v$version" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME does not match manifest version $version"; exit 1; }
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+      - run: npm ci --no-fund --no-audit
+      - run: node --test tests/protocol.test.mjs
+      - run: node build.mjs
+      - name: Zip the extension
+        run: cd dist && zip -r "../gramlot-devtools-$VERSION.zip" . -x 'feasibility.*'
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" "gramlot-devtools-$VERSION.zip" --title "$GITHUB_REF_NAME" --generate-notes

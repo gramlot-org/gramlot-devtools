@@ -9,8 +9,7 @@ import {dirname, join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 const EXT = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist');
-const PLAYWRIGHT = process.env.PLAYWRIGHT || '/Users/gporcari/Sviluppo/gramlot/gramlot-rosetta/node_modules/playwright/index.mjs';
-const {chromium} = await import(PLAYWRIGHT);
+import {chromium} from 'playwright';
 const context = await chromium.launchPersistentContext('', {
     headless: true, channel: 'chromium',
     args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],

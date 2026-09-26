@@ -3,11 +3,11 @@
  * Headless end-to-end check of the unpacked extension in Chromium.
  * Run after `node build.mjs`: `node tests/e2e.mjs`.
  *
- * Playwright is not a dependency of this tool: PLAYWRIGHT points to an
- * existing installation (default: the gramlot-rosetta checkout).
+ * Playwright is a development dependency (`npm install`, then
+ * `npx playwright install chromium` once).
  * DevTools cannot be opened headlessly, so the panel is opened as a tab
  * (panel.html?tabId=N). That exercises agent, content script, background and
- * panel, but not chrome.devtools.* (panel registration, inspectedWindow.eval).
+ * panel, but not chrome.devtools.* (panel registration).
  */
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
@@ -19,8 +19,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const TOOL = join(HERE, '..');
 const EXT = join(TOOL, 'dist');
 const PAGES = join(TOOL, 'test-page');
-const PLAYWRIGHT = process.env.PLAYWRIGHT || '/Users/gporcari/Sviluppo/gramlot/gramlot-rosetta/node_modules/playwright/index.mjs';
-const {chromium} = await import(PLAYWRIGHT);
+import {chromium} from 'playwright';
 
 const TYPES = {'.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css'};
 const server = createServer(async (req, res) => {

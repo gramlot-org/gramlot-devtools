@@ -1,35 +1,29 @@
 // Copyright 2026 Softwell S.r.l. - SPDX-License-Identifier: Apache-2.0
 /**
- * Build the unpacked Chrome extension into ./dist and the test page runtime
- * into ./test-page/vendor. Run from this folder: `node build.mjs`.
+ * Build the unpacked Chrome extension into ./dist and, when the Gramlot
+ * runtime is available, copy it into ./test-page/vendor for the test page.
+ * Run after `npm install`: `node build.mjs`.
  *
- * No global or local npm install: esbuild and the Bag/TYTX packages are
- * resolved from existing checkouts. Override the defaults with:
- *   GRAMLOT_JS        Gramlot js/ folder (esbuild, @jsr/genro__bag, @jsr/genro__tytx,
- *                     dist/gramlot.js for the test page). Only read.
- *   POC_NODE_MODULES  node_modules providing the third-party packages that the
- *                     PoC runtime imports. Only read.
+ * GRAMLOT_RUNTIME  path of Gramlot's built `dist/gramlot.js`, used only by the
+ *                  test page. Default: a sibling checkout of gramlot-org/gramlot
+ *                  (`../gramlot/js/dist/gramlot.js`). Only read.
  */
 import {cpSync, mkdirSync, rmSync, existsSync} from 'node:fs';
 import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {build} from 'esbuild';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const POC = resolve(HERE, '../..');
-const GRAMLOT_JS = process.env.GRAMLOT_JS || '/Users/gporcari/Sviluppo/gramlot/gramlot/js';
-const POC_NODE_MODULES = process.env.POC_NODE_MODULES
-    || (existsSync(join(POC, 'js/dom/node_modules')) ? join(POC, 'js/dom/node_modules')
-        : '/Users/gporcari/Sviluppo/gramlot/gramlot-poc/js/dom/node_modules');
-const JSR = join(GRAMLOT_JS, 'node_modules/@jsr');
-const {build} = await import(join(GRAMLOT_JS, 'node_modules/esbuild/lib/main.js'));
-
+const POC = join(HERE, 'vendor/gramlot-poc');
+const JSR = join(HERE, 'node_modules/@jsr');
+const GRAMLOT_RUNTIME = process.env.GRAMLOT_RUNTIME || resolve(HERE, '../gramlot/js/dist/gramlot.js');
 const DIST = join(HERE, 'dist');
 rmSync(DIST, {recursive: true, force: true});
 mkdirSync(DIST, {recursive: true});
 
-// The PoC runtime imports bare `gramlot-dom`, `genro-bag-js`, `genro-tytx` and
-// `/_assets/dom/...`. Bag and TYTX are the @jsr packages used by Gramlot, so
-// panel and page share library versions and TYTX suffixes.
+// The vendored PoC runtime imports bare `gramlot-dom`, `genro-bag-js`,
+// `genro-tytx` and `/_assets/dom/...`. Bag and TYTX are the @jsr packages used
+// by Gramlot, so panel and page share library versions and TYTX suffixes.
 const resolver = {name: 'gramlot-devtools', setup(b) {
     b.onResolve({filter: /^\/_assets\/dom\//}, a => ({path: join(POC, 'js/dom/src', a.path.slice(13))}));
     b.onResolve({filter: /^gramlot-dom$/}, () => ({path: join(POC, 'js/dom/src/index.js')}));
@@ -39,7 +33,6 @@ const resolver = {name: 'gramlot-devtools', setup(b) {
 
 const common = {
     bundle: true, minify: false, sourcemap: false, logLevel: 'warning', target: 'chrome120',
-    nodePaths: [POC_NODE_MODULES, join(GRAMLOT_JS, 'node_modules')],
     plugins: [resolver], loader: {'.tytx': 'text'},
     legalComments: 'none',
 };
@@ -62,6 +55,10 @@ for (const file of ['manifest.json', 'devtools.html', 'panel.html', 'panel.css',
 cpSync(join(POC, 'js/pages/src/inspector.css'), join(DIST, 'inspector.css'));
 
 // Test page: the Gramlot runtime is copied, never built or modified in place.
-mkdirSync(join(HERE, 'test-page/vendor'), {recursive: true});
-cpSync(join(GRAMLOT_JS, 'dist/gramlot.js'), join(HERE, 'test-page/vendor/gramlot.js'));
+if (existsSync(GRAMLOT_RUNTIME)) {
+    mkdirSync(join(HERE, 'test-page/vendor'), {recursive: true});
+    cpSync(GRAMLOT_RUNTIME, join(HERE, 'test-page/vendor/gramlot.js'));
+} else {
+    console.log(`test page runtime not copied: ${GRAMLOT_RUNTIME} not found (set GRAMLOT_RUNTIME)`);
+}
 console.log('built', entries.map(entry => entry.in).join(', '), '->', DIST);
