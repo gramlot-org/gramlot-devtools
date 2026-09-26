@@ -5,10 +5,10 @@
 > its history, to its own repository `gramlot-org/gramlot-devtools`. Paths and
 > commit hashes below refer to the gramlot-poc worktree.
 
-Date: 2026-09-25. Branch `inspector-provvisorio` of gramlot-poc, worktree
-`/Users/gporcari/Sviluppo/gramlot/worktrees/inspector-provvisorio`.
-First delivery: `5f613e3`. Changes after the owner's review: `4eeed7b` to
-`4262876` (list below). Not pushed.
+Date: 2026-09-25. Branch `inspector-provvisorio` of gramlot-poc (local, not
+pushed). First delivery: `5f613e3`. Changes after the owner's review: `4eeed7b` to
+`4262876` (list below). The same commits are in this repository's history
+with other hashes.
 
 ## What is done
 
@@ -82,13 +82,13 @@ worker console.
 ## How to use
 
 ```sh
-cd /Users/gporcari/Sviluppo/gramlot/worktrees/inspector-provvisorio/tools/gramlot-devtools-chrome
+npm install
 node build.mjs
 cd test-page && python3 -m http.server 8765
 ```
 
 1. Chrome → `chrome://extensions` → Developer mode → **Load unpacked** →
-   `tools/gramlot-devtools-chrome/dist`.
+   `dist/`.
 2. For `file://` pages: extension **Details** → **Allow access to file URLs**.
 3. Open `http://127.0.0.1:8765/index.html`, open DevTools, select **Gramlot**.
    Extension panels live in the main DevTools tab bar only; the drawer
