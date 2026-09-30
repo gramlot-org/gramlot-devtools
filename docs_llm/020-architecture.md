@@ -18,7 +18,7 @@ Agent (MAIN world) ↔ content script (ISOLATED) via `window.postMessage`; conte
 
 Block ID: **GDT-020-010**.
 
-Shape `{channel: 'gramlot-devtools', v: 1, id, type, payload}`. Page → panel: `hello`, `snapshot`, `change`, `result`, `bye`. Panel → page: `subscribe`, `unsubscribe`, `setValue`, `setAttributes`, `deleteAttribute`, `setBreakpoints`. TYTX values; null attribute = remove in partial updates. Frames in control envelopes. Payloads in the README.
+Shape `{channel: 'gramlot-devtools', v: 1, id, type, payload}`. Page → panel: `hello`, `visibility`, `snapshot`, `change`, `result`, `bye`. Panel → page: `subscribe`, `unsubscribe`, `setValue`, `setAttributes`, `deleteAttribute`, `setBreakpoints`. TYTX values; null attribute = remove in partial updates. Frames in control envelopes. Payloads in the README.
 
 <a id="gdt-020-015"></a>
 
@@ -35,3 +35,5 @@ Copies change only from `snapshot`/`change`; edits are commands; no optimistic u
 Block ID: **GDT-020-020**.
 
 On-demand `chrome.scripting` injection in all frames, plus per-frame on `webNavigation.onCompleted`. Panel pings every 20 s against service worker shutdown and reconnects. Back/forward cache: content closes its port on persisted `pagehide`, reopens on `pageshow`.
+
+Each agent observes its document with IntersectionObserver and sends `visibility {visible: boolean}` on connection and changes, independently of instance discovery. The panel preserves visibility across `hello` messages; disconnecting the agent also disconnects the observer.

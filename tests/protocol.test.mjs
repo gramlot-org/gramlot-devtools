@@ -6,7 +6,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    CHANNEL, VERSION, message, isMessage, encodeValue, decodeValue, encodeAttrs, decodeAttrs,
+    CHANNEL, VERSION, message, isMessage, isVisibility, encodeValue, decodeValue, encodeAttrs, decodeAttrs,
     changesFromEvent, applyChange, splitPath,
 } from '../src/protocol.js';
 
@@ -35,6 +35,18 @@ test('message envelope', () => {
     assert.equal(isMessage({...msg, v: 2}), false);
     assert.equal(isMessage({...msg, channel: 'other'}), false);
     assert.equal(isMessage(null), false);
+});
+
+test('visibility messages carry a boolean independently of an instance', () => {
+    for (const visible of [true, false]) {
+        const msg = JSON.parse(JSON.stringify(message('visibility', {visible})));
+        assert.equal(isMessage(msg), true);
+        assert.equal(isVisibility(msg.payload), true);
+        assert.equal(msg.payload.visible, visible);
+    }
+    for (const payload of [null, undefined, {}, {visible: 'false'}, {visible: 0}]) {
+        assert.equal(isVisibility(payload), false);
+    }
 });
 
 test('scalar values keep their TYTX type', () => {

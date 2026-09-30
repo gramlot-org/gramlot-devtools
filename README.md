@@ -59,7 +59,8 @@ the Gramlot runtime for the test page). Both are git-ignored.
 | `GRAMLOT_RUNTIME` | `../gramlot/js/dist/gramlot.js` (sibling checkout of gramlot-org/gramlot) | test page runtime; skipped with a message when missing |
 
 - Bag and TYTX: `@jsr/genro__bag` 0.5.3 and `@jsr/genro__tytx` 0.15.1, the
-  versions used by Gramlot, so panel and page share library versions.
+  panel's pinned versions. Gramlot pages may use newer versions; compatibility
+  is checked through snapshots and live updates, without changing these pins.
 - PoC runtime: `vendor/gramlot-poc/`, an unmodified copy of the modules the
   panel bundle reaches, from gramlot-poc commit `10478b5`. It is removed when
   the panel moves to the published Gramlot package. See its README.
@@ -115,20 +116,26 @@ DevTools
   covers reloads, navigation and iframes added later. Frames the host
   permissions do not cover are skipped.
 - Frames: the panel keeps the frames that hold an instance. It inspects one
-  at a time, top frame first. When more than one frame holds an instance, a
-  selector in the status bar lists them by page title (`(top)` marks the top
+  at a time, automatically following visible iframes. When more than one
+  eligible frame holds an instance, a selector in the status bar lists them by page title (`(top)` marks the top
   frame). Without a title, and in the option tooltip, a frame is shown by its
   path: `top`, or the frame URL relative to the top frame directory (path
   from the root on the same origin, full URL on another origin).
-  Choosing another frame unsubscribes the previous one and takes new
-  snapshots.
+  The selector includes the base window and visible iframes only. Each agent
+  observes its document with IntersectionObserver, so hidden ancestor panels
+  exclude their iframes without runner-specific knowledge. A newly visible
+  iframe is selected automatically; otherwise visible iframes are preferred
+  in frame-id order, with the base window as fallback. A manual choice lasts
+  until the next iframe visibility change. Choosing another frame unsubscribes
+  the previous one and takes new Data and Source snapshots.
 - Service worker lifetime: Chrome stops an idle MV3 service worker after
   about 30 s and closes its ports. The panel sends `{control: 'ping'}` every
   20 s while it is open; if the port closes anyway, the panel connects again,
   sends `attach` and receives new snapshots.
 - Closing DevTools: background sends `detach`; content tells the agent to
   `disconnect`. The agent unsubscribes from both Bags, stops its timer,
-  removes its `message` and `pagehide` listeners and its marker
+  disconnects its visibility observer, removes its `message` and `pagehide`
+  listeners and its marker
   (`window[Symbol.for('gramlot-devtools.agent')]`).
 
 ### Files
@@ -172,6 +179,7 @@ Page → panel:
 
 | Type | Payload |
 | --- | --- |
+| `visibility` | `{visible: boolean}`, independent of an instance; sent on connection and visibility changes |
 | `hello` | `{instances: [{instanceId, pageId, title}]}`; `title` is `document.title` when the instance appears; `instances: []` when the page has no Gramlot |
 | `snapshot` | `{instanceId, root: 'data'\|'source', tytx}` or `{..., error}` |
 | `change` | `{instanceId, root, evt: 'ins'\|'upd'\|'del', path, ind?, tytxValue?, bag?, attrs?}` |
@@ -265,6 +273,12 @@ workflow `.github/workflows/release.yml` builds `dist/`, zips it without the
 GitHub release.
 
 ## Known limits
+
+- With the Gramlot 0.2.0 runtime, the pinned panel libraries read Data and
+  Source rows but do not retain the Source wire metadata
+  `__cls: "GramlotBuilderBag"`. Exact Source TYTX round-trip comparisons fail
+  (five e2e checks and three DevTools checks); this also occurs on the
+  unmodified baseline. Dependency upgrades require a separate decision.
 
 - One instance per frame: `window.gramlot` of each frame.
 - The copy is rebuilt from a new snapshot when a change cannot be applied.

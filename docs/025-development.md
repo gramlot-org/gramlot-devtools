@@ -17,7 +17,7 @@ npm install
 node build.mjs
 ```
 
-`dist/` is the extension. The test page copies Gramlot's `dist/gramlot.js` from `GRAMLOT_RUNTIME` (default: sibling checkout `../gramlot/js/dist/gramlot.js`); when it is missing the copy is skipped with a message. Bag and TYTX are `@jsr/genro__bag` 0.5.3 and `@jsr/genro__tytx` 0.15.1, the versions used by Gramlot.
+`dist/` is the extension. The test page copies Gramlot's `dist/gramlot.js` from `GRAMLOT_RUNTIME` (default: sibling checkout `../gramlot/js/dist/gramlot.js`); when it is missing the copy is skipped with a message. Bag and TYTX are `@jsr/genro__bag` 0.5.3 and `@jsr/genro__tytx` 0.15.1, the pinned panel versions.
 
 <a id="gdt-025-010"></a>
 
@@ -33,6 +33,8 @@ node tests/devtools.mjs               # panel inside real DevTools, over CDP
 ```
 
 The browser tests need `npx playwright install chromium`. They enable the back/forward cache, which Playwright disables by default. `tests/devtools.mjs` reaches the DevTools frontend through an internal module path that can change between Chromium versions. Headless Chromium does not replace a check in Google Chrome: three defects were found only there (service worker shutdown, back/forward cache port errors and reconnection).
+
+With the Gramlot 0.2.0 runtime, the pinned panel libraries read the Data and Source rows but omit the Source wire metadata `__cls: "GramlotBuilderBag"`. Five e2e checks and three DevTools checks fail on exact Source TYTX comparisons, also on the unmodified baseline. Dependency upgrades require a separate decision.
 
 <a id="gdt-025-015"></a>
 

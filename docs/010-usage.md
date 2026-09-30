@@ -36,7 +36,7 @@ Bag values and node insertion or removal are not editable from the panel.
 
 Block ID: **GDT-010-015**.
 
-Every frame of the inspected tab has its own agent and at most one instance (`window.gramlot` of that frame). The panel inspects one instance at a time, top frame first. When more than one frame holds an instance, a selector in the status bar lists them by page title, with the frame path as tooltip. Iframes from origins outside the host permissions are not inspected.
+Each frame has one agent and at most one Gramlot instance. The selector lists the base window and visible iframes with an instance, by page title (path in the tooltip); hidden iframes are excluded. A newly visible iframe is selected automatically, refreshing Data and Source. A manual choice lasts until the next iframe visibility change. When a fallback is needed, visible iframes are preferred in frame-id order, then the base window. Iframes outside the host permissions are skipped. Visibility is measured by intersection with the viewport, including ancestor clipping; browser-tab focus does not choose a frame.
 
 <a id="gdt-010-020"></a>
 

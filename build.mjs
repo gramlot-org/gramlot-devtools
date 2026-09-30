@@ -48,7 +48,7 @@ for (const entry of entries) {
     await build({...common, entryPoints: [join(HERE, entry.in)], format: entry.format,
         outfile: join(DIST, entry.in.slice(4))});
 }
-for (const file of ['manifest.json', 'devtools.html', 'panel.html', 'panel.css', 'feasibility.html']) {
+for (const file of ['manifest.json', 'devtools.html', 'panel.html', 'panel.css', 'panel-tabs.css', 'feasibility.html']) {
     if (existsSync(join(HERE, 'src', file))) cpSync(join(HERE, 'src', file), join(DIST, file));
 }
 // Unchanged PoC stylesheet, loaded by the inspector through import.meta.url.

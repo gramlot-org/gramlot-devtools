@@ -34,7 +34,7 @@ Block ID: **GDT-020-010**.
 
 Every message has the shape `{channel: 'gramlot-devtools', v: 1, id, type, payload}`.
 
-- Page → panel: `hello`, `snapshot`, `change`, `result`, `bye`.
+- Page → panel: `hello`, `visibility`, `snapshot`, `change`, `result`, `bye`.
 - Panel → page: `subscribe`, `unsubscribe`, `setValue`, `setAttributes`, `deleteAttribute`, `setBreakpoints`.
 - Values and attributes travel as TYTX text. In attribute payloads a null means "remove" and an absent name means "unchanged"; in a Bag the two are the same, so the wrapper keeps the nulls.
 - Frames travel in control envelopes around protocol messages (`to-frame`, `frame`, `frame-detached`); protocol messages are never rewritten.
@@ -58,3 +58,5 @@ Block ID: **GDT-020-020**.
 - Injection with `chrome.scripting` into all accessible frames when the panel opens, and into one frame after each completed load of that frame (`chrome.webNavigation.onCompleted`).
 - Chrome stops an idle MV3 service worker after about 30 seconds. The panel pings every 20 seconds and reconnects if the port closes anyway.
 - Back/forward cache: the content script closes its port on `pagehide` (persisted) and opens a new one on `pageshow`; the agent stays installed and announces itself again.
+
+Each agent observes its document with IntersectionObserver and sends `visibility {visible: boolean}` on connection and changes, independently of instance discovery. The panel preserves visibility across `hello` messages; disconnecting the agent also disconnects the observer.

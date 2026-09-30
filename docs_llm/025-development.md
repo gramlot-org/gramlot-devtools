@@ -10,7 +10,7 @@ Document ID: **GDT-025**.
 
 Block ID: **GDT-025-005**.
 
-`npm install`, `node build.mjs` → `dist/`. Test page runtime from `GRAMLOT_RUNTIME` (default `../gramlot/js/dist/gramlot.js`, skipped when missing). Bag 0.5.3 and TYTX 0.15.1 as in Gramlot.
+`npm install`, `node build.mjs` → `dist/`. Test page runtime from `GRAMLOT_RUNTIME` (default `../gramlot/js/dist/gramlot.js`, skipped when missing). Panel dependencies remain pinned to Bag 0.5.3 and TYTX 0.15.1.
 
 <a id="gdt-025-010"></a>
 
@@ -19,6 +19,8 @@ Block ID: **GDT-025-005**.
 Block ID: **GDT-025-010**.
 
 Four suites: protocol (node), feasibility, e2e, DevTools (Playwright Chromium, back/forward cache enabled). The DevTools suite uses an internal frontend path. Also check in Google Chrome: headless missed three defects.
+
+With the Gramlot 0.2.0 runtime, the pinned panel libraries read the Data and Source rows but omit the Source wire metadata `__cls: "GramlotBuilderBag"`. Five e2e checks and three DevTools checks fail on exact Source TYTX comparisons, also on the unmodified baseline. Dependency upgrades require a separate decision.
 
 <a id="gdt-025-015"></a>
 

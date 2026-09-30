@@ -16,7 +16,7 @@
 import {Bag} from 'genro-bag-js';
 import {fromTytx} from 'genro-tytx';
 import {BAG_CLASSES} from './panel-bags.js';
-import {ROOTS, message, nextId, isMessage, encodeValue, encodeAttrs, applyChange} from './protocol.js';
+import {ROOTS, message, nextId, isMessage, isVisibility, encodeValue, encodeAttrs, applyChange} from './protocol.js';
 import {mountPanelInspector} from './inspector/panel-inspector.js';
 import recipe from './inspector/inspector-embedded.tytx';
 
@@ -31,7 +31,7 @@ const breakpointsButton = document.getElementById('breakpoints');
 const breakpointDialog = document.getElementById('breakpoint-dialog');
 const breakpointList = document.getElementById('breakpoint-list');
 
-// frames: frameId -> {url, instance: {instanceId, pageId} | null}.
+// frames: frameId -> {url, visible: boolean | null, instance: {instanceId, pageId} | null}.
 // frameId/instanceId: the inspected frame and its instance.
 // breakpoints: `${root}:${path}` -> {root, path, mode, condition, error}. They
 // belong to the panel and are sent to the inspected instance (legacy
@@ -85,9 +85,14 @@ function renderStatusBar() {
     statusBar.hidden = messageLine.hidden && frameSelect.hidden && breakpointsButton.hidden;
 }
 
-/** Frame selector: shown only when more than one frame holds an instance. */
+function availableFrames() {
+    return [...state.frames].filter(([id, frame]) => frame.instance && (id === 0 || frame.visible === true))
+        .sort(([a], [b]) => a - b);
+}
+
+/** List the base window and visible frames that hold an instance. */
 function renderFrames() {
-    const withInstance = [...state.frames].filter(([, frame]) => frame.instance);
+    const withInstance = availableFrames();
     frameSelect.hidden = withInstance.length < 2;
     renderStatusBar();
     frameSelect.replaceChildren(...withInstance.map(([frameId, frame]) => {
@@ -173,12 +178,21 @@ function select(frameId) {
     sendBreakpoints();
 }
 
-/** Keep the inspected frame if it still has an instance; otherwise pick one, top frame first. */
-function choose(removedText = 'No Gramlot instance in this page.') {
-    if (state.frameId !== null && state.frames.get(state.frameId)?.instance) { renderFrames(); return; }
-    const candidates = [...state.frames].filter(([, frame]) => frame.instance).map(([frameId]) => frameId);
-    if (!candidates.length) { reset('none', removedText); return; }
-    select(candidates.includes(0) ? 0 : Math.min(...candidates));
+/** Keep a manual choice until visibility changes; prefer visible subframes. */
+function choose(removedText = 'No Gramlot instance in this page.', follow = false, appeared = null) {
+    const candidates = availableFrames().map(([frameId]) => frameId);
+    if (!follow && candidates.includes(state.frameId)) { renderFrames(); return; }
+    if (!candidates.length) {
+        if (state.frames.get(state.frameId)?.instance) {
+            for (const root of ROOTS) send('unsubscribe', {instanceId: state.instanceId, root});
+        }
+        reset('none', removedText);
+        return;
+    }
+    const next = appeared !== 0 && candidates.includes(appeared) ? appeared
+        : candidates.find(id => id !== 0) ?? candidates[0];
+    if (next === state.frameId) { renderFrames(); return; }
+    select(next);
 }
 
 frameSelect.addEventListener('change', () => select(Number(frameSelect.value)));
@@ -194,11 +208,23 @@ function onProtocol(frameId, url, msg) {
     if (state.log.length > 200) state.log.shift();
     const inspected = frameId === state.frameId && p.instanceId === state.instanceId;
     switch (msg.type) {
+        case 'visibility': {
+            if (!isVisibility(p)) return;
+            const frame = state.frames.get(frameId) || {url, instance: null, visible: null};
+            const changed = frame.visible !== p.visible;
+            frame.visible = p.visible;
+            state.frames.set(frameId, frame);
+            if (changed && frame.instance) choose('No Gramlot instance in this page.', frameId !== 0,
+                p.visible ? frameId : null);
+            return;
+        }
         case 'hello': {
-            state.frames.set(frameId, {url, instance: p.instances[0] || null});
+            const previous = state.frames.get(frameId);
+            state.frames.set(frameId, {url, visible: previous?.visible ?? null, instance: p.instances[0] || null});
             // A new hello from the inspected frame means a new instance there.
             if (frameId === state.frameId) state.frameId = null;
-            choose();
+            choose('No Gramlot instance in this page.', !previous?.instance && previous?.visible === true && frameId !== 0,
+                frameId);
             return;
         }
         case 'snapshot':

@@ -15,6 +15,11 @@ export const CHANNEL = 'gramlot-devtools';
 export const VERSION = 1;
 export const ROOTS = ['data', 'source'];
 
+/** Frame visibility is independent of the presence of a Gramlot instance. */
+export function isVisibility(payload) {
+    return payload !== null && typeof payload === 'object' && typeof payload.visible === 'boolean';
+}
+
 let counter = 0;
 export function nextId(prefix = 'm') {
     counter += 1;

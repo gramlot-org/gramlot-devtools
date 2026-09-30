@@ -4,13 +4,6 @@ html, body { margin: 0; height: 100%; }
 body { display: flex; flex-direction: column; background: Canvas; color: CanvasText; }
 #status { padding: 4px 8px; border-bottom: 1px solid color-mix(in srgb, CanvasText 15%, transparent); display: flex; gap: 12px; align-items: center; }
 #status[data-state="none"] #message { font-weight: 600; }
-/* Darker, larger Data/Source tabs: custom properties of the PoC tab container. */
-#inspector {
-  --tabbar-background: #e3e7ec; --tab-border: #b9c0c9;
-  --tab-color: #3a434f; --tab-font-weight: 500;
-  --tab-active-color: #111827; --tab-active-weight: 700;
-  --tab-font-size: 13px; --tab-padding: 7px 16px;
-}
 #message[hidden], #status[hidden], #breakpoints[hidden] { display: none; }
 #breakpoints { margin-left: auto; font: inherit; padding: 1px 8px; }
 #breakpoints[data-error="true"] { color: #c62828; }

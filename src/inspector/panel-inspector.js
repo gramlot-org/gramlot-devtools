@@ -51,6 +51,10 @@ export function mountPanelInspector(host, source, sink) {
     const app = new Application(mount, builder, {inspector: false});
     mount.append(stylesheet);
     mount.querySelector('[data-inspector="toggle"]').hidden = true;
+    const tabStylesheet = host.ownerDocument.createElement('link');
+    tabStylesheet.rel = 'stylesheet';
+    tabStylesheet.href = new URL('./panel-tabs.css', import.meta.url).href;
+    mount.querySelector('gnr-tabcontainer').shadowRoot.append(tabStylesheet);
     app.live(() => builder.data.setItem('opened', true));
     const scopes = {};
     for (const kind of KINDS) {

@@ -28,11 +28,22 @@ function install() {
     // `${root}:${path}` -> {root, path, mode: 'debugger'|'console', condition, test}
     const breakpoints = new Map();
     let watcher = null;
+    let visible = null;
 
     const send = (type, payload, id) => {
         if (!session) return;
         window.postMessage({...message(type, payload, id), dir: 'to-panel', session}, '*');
     };
+    // Intersection includes clipping by ancestor frames, including hidden tab
+    // panels. Browser-tab focus does not change the inspected frame selection.
+    const visibilityObserver = new IntersectionObserver(entries => {
+        const entry = entries.at(-1);
+        const next = entry.isIntersecting && entry.intersectionRect.width > 0 && entry.intersectionRect.height > 0;
+        if (next === visible) return;
+        visible = next;
+        send('visibility', {visible});
+    });
+    visibilityObserver.observe(document.documentElement);
     const current = () => {
         const gramlot = window.gramlot;
         const valid = gramlot && gramlot.state !== 'disposed' && gramlot.data && gramlot.source
@@ -154,6 +165,7 @@ function install() {
         switch (msg.type) {
             case 'connect':
                 session = p.session;
+                if (visible !== null) send('visibility', {visible});
                 tracked = null;
                 unsubscribeAll();
                 breakpoints.clear();
@@ -210,6 +222,7 @@ function install() {
         breakpoints.clear();
         clearInterval(watcher);
         watcher = null;
+        visibilityObserver.disconnect();
         window.removeEventListener('message', onMessage);
         window.removeEventListener('pagehide', onPageHide);
         session = null;

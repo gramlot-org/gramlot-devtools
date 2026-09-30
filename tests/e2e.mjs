@@ -36,7 +36,7 @@ const ORIGIN = `http://127.0.0.1:${server.address().port}`;
 const results = [];
 const check = async (name, fn) => {
     try { await fn(); results.push(['PASS', name]); }
-    catch (error) { results.push(['FAIL', name, error.message.split('\n')[0]]); }
+    catch (error) { results.push(['FAIL', name, error.stack || error.message]); }
 };
 const errors = [];
 const watch = (page, label) => {
@@ -331,6 +331,60 @@ try {
         assert.equal(await frameOf('first').evaluate(() => gramlot.data.getItem('customer.name')), 'Ada');
         await second.evaluate(() => gramlot.data.setItem('live', 1));
         await panel.waitForFunction(() => window.panelScopes.data.bag.getItem('live') === 1, null, {timeout: 3000});
+    });
+    await check('visible frames: follow tab switches, preserve manual choice and recover after removal', async () => {
+        await page.goto(`${ORIGIN}/index.html`);
+        await page.waitForFunction(() => window.gramlot?.state === 'started');
+        await panel.waitForFunction(() => gramlotDevtools.frameId === 0 && panelScopes.data.bag.getItem('customer.name') === 'Ada');
+        await page.evaluate(() => {
+            for (const name of ['first', 'second']) {
+                const wrapper = document.createElement('div');
+                wrapper.id = `tab-${name}`;
+                wrapper.hidden = name === 'second';
+                const frame = document.createElement('iframe');
+                frame.src = `index.html?frame=${name}`;
+                frame.style.cssText = 'width:480px;height:250px';
+                wrapper.append(frame);
+                document.body.prepend(wrapper);
+            }
+        });
+        const frameOf = name => page.frames().find(f => f.url().includes(`frame=${name}`));
+        await panel.waitForFunction(() => document.getElementById('frame').options.length === 2
+            && gramlotDevtools.frames.get(gramlotDevtools.frameId)?.url.includes('frame=first')
+            && panelScopes.data.bag.getItem('customer.name') === 'Ada');
+        for (const name of ['first', 'second']) {
+            await frameOf(name).waitForFunction(() => window.gramlot?.state === 'started');
+            await frameOf(name).evaluate(name => {
+                gramlot.data.setItem('customer.name', name);
+                gramlot.source.getNode('main.div_0').setAttr({title: name});
+            }, name);
+        }
+        await panel.selectOption('#frame', '0');
+        await panel.waitForFunction(() => panelScopes.data.bag.getItem('customer.name') === 'Ada');
+        // Ordinary data updates must not undo a manual choice.
+        await frameOf('first').evaluate(() => gramlot.data.setItem('customer.name', 'first updated'));
+        await page.evaluate(() => gramlot.data.setItem('manualSelection', true));
+        await panel.waitForFunction(() => panelScopes.data.bag.getItem('manualSelection') === true);
+        assert.equal(await panel.evaluate(() => gramlotDevtools.frameId), 0);
+        await page.evaluate(() => {
+            document.getElementById('tab-first').hidden = true;
+            document.getElementById('tab-second').hidden = false;
+        });
+        await panel.waitForFunction(() => panelScopes.data.bag.getItem('customer.name') === 'second'
+            && document.getElementById('frame').options.length === 2
+            && ![...document.getElementById('frame').options].some(o => o.title.includes('frame=first')));
+        const secondRows = await frameOf('second').evaluate(() => JSON.parse(gramlot.source.toTytx('json')).rows);
+        await panel.waitForFunction(rows => JSON.stringify(JSON.parse(panelScopes.source.bag.toTytx('json')).rows)
+            === JSON.stringify(rows), secondRows);
+        await page.evaluate(() => {
+            document.getElementById('tab-second').hidden = true;
+            document.getElementById('tab-first').hidden = false;
+        });
+        await panel.waitForFunction(() => panelScopes.data.bag.getItem('customer.name') === 'first updated');
+        await page.evaluate(() => document.getElementById('tab-first').remove());
+        await panel.waitForFunction(() => gramlotDevtools.frameId === 0
+            && panelScopes.data.bag.getItem('customer.name') === 'Ada'
+            && document.getElementById('frame').options.length === 1);
     });
     await check('strict page CSP: the panel connects and the copies equal the page', async () => {
         await page.goto(`${ORIGIN}/csp.html`);
