@@ -5,8 +5,8 @@
  * new Function; any attempt is recorded in `window.feasibility.violations`.
  * Edits are written directly to the local Bags (no inspected page here).
  */
-import {Bag} from 'genro-bag-js';
-import {fromTytx} from 'genro-tytx';
+import {Bag} from '@genrojs/bag';
+import {fromTytx} from '@genrojs/tytx';
 import {mountPanelInspector} from './inspector/panel-inspector.js';
 import recipe from './inspector/inspector.tytx';
 

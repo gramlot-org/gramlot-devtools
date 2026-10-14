@@ -20,8 +20,8 @@ jobs:
           version=$(node -p "require('./src/manifest.json').version")
           test "v$version" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME does not match manifest version $version"; exit 1; }
           echo "VERSION=$version" >> "$GITHUB_ENV"
-      - run: npm ci --no-fund --no-audit
-      - run: node --test tests/protocol.test.mjs
+      - run: npm install --package-lock=false --no-fund --no-audit
+      - run: npm test
       - run: node build.mjs
       - name: Zip the extension
         run: cd dist && zip -r "../gramlot-devtools-$VERSION.zip" . -x 'feasibility.*'

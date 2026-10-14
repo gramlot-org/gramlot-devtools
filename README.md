@@ -1,5 +1,7 @@
 # Gramlot DevTools for Chrome
 
+Current version: **0.1.1**.
+
 A Chrome extension (Manifest V3, loaded unpacked) that adds a **Gramlot**
 panel to Chrome DevTools. The panel shows and edits the **Data Bag** and the
 **Source Bag** of an open Gramlot page.
@@ -24,7 +26,7 @@ injected by the extension while the panel is open.
   it, document it as its own or distribute it. For this reason amendment 11.22
   (`gramlot/docs/00-constitution.md:553-554`) does not apply.
 - The Gramlot repository is not modified. The agent uses only
-  `window.gramlot`, `gramlot.data`, `gramlot.source` and public Bag APIs
+  `window.gramlot`, `gramlot.data`, `gramlot.src.source` and public Bag APIs
   (`getNode`, `subscribe`, `unsubscribe`, `toTytx`, `fromTytx`,
   `node.setAttr`, `node.setValue`).
 - Chrome only.
@@ -42,11 +44,10 @@ injected by the extension while the panel is open.
 
 ## Build from source
 
-Node 22 or later. Dependencies are installed locally (`.npmrc` points the
-`@jsr` scope to `npm.jsr.io`):
+Node 22 or later. Dependencies are installed locally from npm:
 
 ```sh
-npm install
+npm install --package-lock=false
 npx playwright install chromium   # only for the browser tests
 node build.mjs
 ```
@@ -58,12 +59,18 @@ the Gramlot runtime for the test page). Both are git-ignored.
 | --- | --- | --- |
 | `GRAMLOT_RUNTIME` | `../gramlot/js/dist/gramlot.js` (sibling checkout of gramlot-org/gramlot) | test page runtime; skipped with a message when missing |
 
-- Bag and TYTX: `@jsr/genro__bag` 0.5.3 and `@jsr/genro__tytx` 0.15.1, the
-  panel's pinned versions. Gramlot pages may use newer versions; compatibility
-  is checked through snapshots and live updates, without changing these pins.
+- Bag and TYTX: maintained npm packages `@genrojs/bag` and `@genrojs/tytx`.
+  First-party dependencies are unconstrained and not frozen by a lockfile;
+  refresh them with `npm update --package-lock=false`. Compatibility is checked
+  through exact snapshots and live updates.
 - PoC runtime: `vendor/gramlot-poc/`, an unmodified copy of the modules the
   panel bundle reaches, from gramlot-poc commit `10478b5`. It is removed when
   the panel moves to the published Gramlot package. See its README.
+
+The inspected page must use the current Gramlot proxy API: Data at `gramlot.data`
+and Source at `gramlot.src.source`. Legacy top-level Source aliases are not used.
+The same detection applies to hosted pages and standalone pages; local files also
+require the file-URL permission below.
 
 ## Load in Chrome
 
@@ -253,7 +260,7 @@ the Source.
 After `node build.mjs`:
 
 ```sh
-node --test tests/protocol.test.mjs   # protocol, with the real @jsr/genro__bag
+npm test                            # protocol and agent, with the real Bag
 node tests/feasibility.mjs            # step 1: inspector in an extension page, no eval
 node tests/e2e.mjs                    # extension in headless Chromium, panel opened as a tab
 node tests/devtools.mjs               # panel inside real DevTools, driven over CDP
@@ -273,12 +280,6 @@ workflow `.github/workflows/release.yml` builds `dist/`, zips it without the
 GitHub release.
 
 ## Known limits
-
-- With the Gramlot 0.2.0 runtime, the pinned panel libraries read Data and
-  Source rows but do not retain the Source wire metadata
-  `__cls: "GramlotBuilderBag"`. Exact Source TYTX round-trip comparisons fail
-  (five e2e checks and three DevTools checks); this also occurs on the
-  unmodified baseline. Dependency upgrades require a separate decision.
 
 - One instance per frame: `window.gramlot` of each frame.
 - The copy is rebuilt from a new snapshot when a change cannot be applied.

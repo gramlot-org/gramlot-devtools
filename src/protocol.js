@@ -5,7 +5,7 @@
  * This module imports nothing. Functions that encode or decode values take
  * the Bag class as an argument: the agent passes the class of the inspected
  * page (`gramlot.data.constructor`), the panel passes its own. Both classes
- * come from @jsr/genro__bag, whose `toTytx`/`fromTytx` use @jsr/genro__tytx.
+ * come from @genrojs/bag, whose `toTytx`/`fromTytx` use @genrojs/tytx.
  *
  * Every message: {channel: 'gramlot-devtools', v: 1, id, type, payload}.
  * Between content script and agent two routing fields are added:

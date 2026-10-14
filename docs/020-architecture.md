@@ -47,6 +47,11 @@ The README lists every payload.
 
 Block ID: **GDT-020-015**.
 
+The panel registers the wire subtype `GramlotBuilderBag` with TYTX under `X`,
+mapped to `GramlotSourceCopy`, a passive Bag subclass. This preserves the Source
+class metadata on decode and re-encode without attaching a renderer or builder.
+Plain Data Bags keep their own subtype.
+
 The panel copies change only from `snapshot` and `change` messages. Edits become commands; the page applies them and the copy follows the change event that comes back. There is no optimistic update. When a change cannot be applied, the panel takes a new snapshot.
 
 <a id="gdt-020-020"></a>

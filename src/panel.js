@@ -13,8 +13,8 @@
  * Outside DevTools (automated tests) the page can be opened as
  * panel.html?tabId=N.
  */
-import {Bag} from 'genro-bag-js';
-import {fromTytx} from 'genro-tytx';
+import {Bag} from '@genrojs/bag';
+import {fromTytx} from '@genrojs/tytx';
 import {BAG_CLASSES} from './panel-bags.js';
 import {ROOTS, message, nextId, isMessage, isVisibility, encodeValue, encodeAttrs, applyChange} from './protocol.js';
 import {mountPanelInspector} from './inspector/panel-inspector.js';

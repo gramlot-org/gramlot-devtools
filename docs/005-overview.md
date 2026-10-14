@@ -31,6 +31,11 @@ Block ID: **GDT-005-010**.
 
 Block ID: **GDT-005-015**.
 
-The agent uses only `window.gramlot`, `gramlot.data`, `gramlot.source` and public Bag APIs (`getNode`, `subscribe`, `unsubscribe`, `toTytx`, `fromTytx`, `node.setAttr`, `node.setValue`). The Gramlot repository is never modified by this tool.
+The agent uses only `window.gramlot`, `gramlot.data`, `gramlot.src.source` and public Bag APIs (`getNode`, `subscribe`, `unsubscribe`, `toTytx`, `fromTytx`, `node.setAttr`, `node.setValue`). The Gramlot repository is never modified by this tool.
 
-Planned: a Source ↔ DOM link that reads `gramlot.renderer` (`records`, `elements`) in read only, an accepted owner decision. In GenroPy legacy the same link sits on the objects (`sourceNode.domNode`, `element.sourceNode`); restoring it in Gramlot is a separate Gramlot decision.
+Planned: a Source ↔ DOM link that reads `gramlot.src.renderer` (`records`, `elements`) in read only, an accepted owner decision. In GenroPy legacy the same link sits on the objects (`sourceNode.domNode`, `element.sourceNode`); restoring it in Gramlot is a separate Gramlot decision.
+
+Owner confirmation, 2026-10-14: update the extension to the current Gramlot API
+("si aggiorna"). The Source access is `gramlot.src.source`; the authorized read-only
+renderer access is `gramlot.src.renderer`. This supersedes the old top-level paths
+without adding legacy aliases or changes to Gramlot itself.

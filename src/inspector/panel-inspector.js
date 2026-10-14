@@ -8,7 +8,7 @@
 // - edits go through `sink.commit(...)` (see panel-editor.js) instead of
 //   writing to the Bag, so the panel can turn them into protocol commands.
 import {Application} from 'gramlot-dom';
-import {Bag} from 'genro-bag-js';
+import {Bag} from '@genrojs/bag';
 import {PanelBuilder} from './panel-builder.js';
 import {PanelEditor} from './panel-editor.js';
 

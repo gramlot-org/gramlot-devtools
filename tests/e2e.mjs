@@ -71,7 +71,7 @@ try {
         return s?.instanceId && ['data', 'source'].every(k => s.log.filter(t => t === 'snapshot').length >= 2);
     }, null, {timeout: 10000});
     const same = async () => {
-        const pageWire = await page.evaluate(() => ({data: gramlot.data.toTytx('json'), source: gramlot.source.toTytx('json')}));
+        const pageWire = await page.evaluate(() => ({data: gramlot.data.toTytx('json'), source: gramlot.src.source.toTytx('json')}));
         const copyWire = await panel.evaluate(() => {
             const tool = document.querySelector('#inspector');
             return tool && window.gramlotDevtools && {
@@ -166,7 +166,7 @@ try {
             row.querySelector('[data-cell="value"]').focus();
             row.querySelector('[data-cell="value"]').blur();
         });
-        await page.waitForFunction(() => !gramlot.source.getNode('main.div_0.p_0').attr.class
+        await page.waitForFunction(() => !gramlot.src.source.getNode('main.div_0.p_0').attr.class
             && !document.getElementById('note').hasAttribute('class'), null, {timeout: 3000});
     });
     await check('command errors are reported back (setValue on a missing node)', async () => {
@@ -250,7 +250,7 @@ try {
         await page.waitForFunction(() => window.gramlot?.state === 'started');
         await panel.waitForFunction(() => window.panelScopes.source.bag.getNode('main.div_0'), null, {timeout: 10000});
         await new Promise(resolve => setTimeout(resolve, 200));
-        await hitsAfter(() => gramlot.source.getNode('main.div_0').setAttr({class: 'y'}), 1);
+        await hitsAfter(() => gramlot.src.source.getNode('main.div_0').setAttr({class: 'y'}), 1);
         await selectTab('source');
         await panel.evaluate(() => { const tool = window.gramlotDevtools.tool; tool.app.live(() => tool.app.builder.data.setItem('sourcePath', 'main.div_0')); });
         const line = await panel.evaluate(() => {
@@ -322,7 +322,7 @@ try {
         await panel.selectOption('#frame', value);
         await panel.waitForFunction(() => window.panelScopes.data.bag.getItem('customer.name') === 'Second frame', null, {timeout: 5000});
         const second = frameOf('second');
-        const pageWire = await second.evaluate(() => ({data: gramlot.data.toTytx('json'), source: gramlot.source.toTytx('json')}));
+        const pageWire = await second.evaluate(() => ({data: gramlot.data.toTytx('json'), source: gramlot.src.source.toTytx('json')}));
         const copyWire = await panel.evaluate(() => ({
             data: window.panelScopes.data.bag.toTytx('json'), source: window.panelScopes.source.bag.toTytx('json')}));
         assert.deepEqual(copyWire, pageWire);
@@ -356,7 +356,7 @@ try {
             await frameOf(name).waitForFunction(() => window.gramlot?.state === 'started');
             await frameOf(name).evaluate(name => {
                 gramlot.data.setItem('customer.name', name);
-                gramlot.source.getNode('main.div_0').setAttr({title: name});
+                gramlot.src.source.getNode('main.div_0').setAttr({title: name});
             }, name);
         }
         await panel.selectOption('#frame', '0');
@@ -373,7 +373,7 @@ try {
         await panel.waitForFunction(() => panelScopes.data.bag.getItem('customer.name') === 'second'
             && document.getElementById('frame').options.length === 2
             && ![...document.getElementById('frame').options].some(o => o.title.includes('frame=first')));
-        const secondRows = await frameOf('second').evaluate(() => JSON.parse(gramlot.source.toTytx('json')).rows);
+        const secondRows = await frameOf('second').evaluate(() => JSON.parse(gramlot.src.source.toTytx('json')).rows);
         await panel.waitForFunction(rows => JSON.stringify(JSON.parse(panelScopes.source.bag.toTytx('json')).rows)
             === JSON.stringify(rows), secondRows);
         await page.evaluate(() => {
@@ -419,7 +419,7 @@ try {
         await panel.close();
         await page.waitForFunction(() => !window[Symbol.for('gramlot-devtools.agent')], null, {timeout: 5000});
         const after = await page.evaluate(() => ({
-            subscribers: [gramlot.data, gramlot.source].flatMap(bag =>
+            subscribers: [gramlot.data, gramlot.src.source].flatMap(bag =>
                 [bag._updSubscribers, bag._insSubscribers, bag._delSubscribers].flatMap(Object.keys))
                 .filter(id => id === 'gramlot-devtools'),
         }));

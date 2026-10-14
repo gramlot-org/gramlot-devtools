@@ -1,6 +1,6 @@
 {
   "name": "gramlot-devtools",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Chrome DevTools extension to inspect and edit the Data and Source Bags of a Gramlot page",
   "private": true,
   "type": "module",
@@ -11,12 +11,12 @@
   },
   "scripts": {
     "build": "node build.mjs",
-    "test": "node --test tests/protocol.test.mjs",
+    "test": "node --test tests/protocol.test.mjs tests/agent.test.mjs",
     "test:browser": "node tests/feasibility.mjs && node tests/e2e.mjs && node tests/devtools.mjs"
   },
   "dependencies": {
-    "@jsr/genro__bag": "0.5.3",
-    "@jsr/genro__tytx": "0.15.1"
+    "@genrojs/bag": "*",
+    "@genrojs/tytx": "*"
   },
   "devDependencies": {
     "esbuild": "0.28.2",

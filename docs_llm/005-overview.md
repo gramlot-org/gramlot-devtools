@@ -29,4 +29,9 @@ Block ID: **GDT-005-010**.
 
 Block ID: **GDT-005-015**.
 
-The agent uses `window.gramlot`, `gramlot.data`, `gramlot.source` and public Bag APIs only; Gramlot is never modified. Planned: Source ↔ DOM through `gramlot.renderer` in read only (owner decision); a legacy-style `sourceNode.domNode` link in Gramlot is a separate Gramlot decision.
+The agent uses `window.gramlot`, `gramlot.data`, `gramlot.src.source` and public Bag APIs only; Gramlot is never modified. Planned: Source ↔ DOM through `gramlot.src.renderer` in read only (owner decision); a legacy-style `sourceNode.domNode` link in Gramlot is a separate Gramlot decision.
+
+Owner confirmation, 2026-10-14: update the extension to the current Gramlot API
+("si aggiorna"). The Source access is `gramlot.src.source`; the authorized read-only
+renderer access is `gramlot.src.renderer`. This supersedes the old top-level paths
+without adding legacy aliases or changes to Gramlot itself.

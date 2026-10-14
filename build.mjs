@@ -12,23 +12,24 @@ import {cpSync, mkdirSync, rmSync, existsSync} from 'node:fs';
 import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {build} from 'esbuild';
+import {createRequire} from 'node:module';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const POC = join(HERE, 'vendor/gramlot-poc');
-const JSR = join(HERE, 'node_modules/@jsr');
+const require = createRequire(import.meta.url);
 const GRAMLOT_RUNTIME = process.env.GRAMLOT_RUNTIME || resolve(HERE, '../gramlot/js/dist/gramlot.js');
 const DIST = join(HERE, 'dist');
 rmSync(DIST, {recursive: true, force: true});
 mkdirSync(DIST, {recursive: true});
 
 // The vendored PoC runtime imports bare `gramlot-dom`, `genro-bag-js`,
-// `genro-tytx` and `/_assets/dom/...`. Bag and TYTX are the @jsr packages used
-// by Gramlot, so panel and page share library versions and TYTX suffixes.
+// `genro-tytx` and `/_assets/dom/...`. Resolve its historical import names to
+// the maintained packages; the vendored runtime itself stays unchanged.
 const resolver = {name: 'gramlot-devtools', setup(b) {
     b.onResolve({filter: /^\/_assets\/dom\//}, a => ({path: join(POC, 'js/dom/src', a.path.slice(13))}));
     b.onResolve({filter: /^gramlot-dom$/}, () => ({path: join(POC, 'js/dom/src/index.js')}));
-    b.onResolve({filter: /^genro-bag-js$/}, () => ({path: join(JSR, 'genro__bag/src/index.js')}));
-    b.onResolve({filter: /^genro-tytx$/}, () => ({path: join(JSR, 'genro__tytx/js/src/index.js')}));
+    b.onResolve({filter: /^genro-bag-js$/}, () => ({path: require.resolve('@genrojs/bag')}));
+    b.onResolve({filter: /^genro-tytx$/}, () => ({path: require.resolve('@genrojs/tytx')}));
 }};
 
 const common = {

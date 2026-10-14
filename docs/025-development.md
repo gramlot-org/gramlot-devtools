@@ -10,14 +10,14 @@ Document ID: **GDT-025**.
 
 Block ID: **GDT-025-005**.
 
-Node 22 or later. Dependencies are local; `.npmrc` maps the `@jsr` scope to `npm.jsr.io`.
+Node 22 or later. Dependencies are installed locally from npm.
 
 ```sh
-npm install
+npm install --package-lock=false
 node build.mjs
 ```
 
-`dist/` is the extension. The test page copies Gramlot's `dist/gramlot.js` from `GRAMLOT_RUNTIME` (default: sibling checkout `../gramlot/js/dist/gramlot.js`); when it is missing the copy is skipped with a message. Bag and TYTX are `@jsr/genro__bag` 0.5.3 and `@jsr/genro__tytx` 0.15.1, the pinned panel versions.
+`dist/` is the extension. The test page copies Gramlot's `dist/gramlot.js` from `GRAMLOT_RUNTIME` (default: sibling checkout `../gramlot/js/dist/gramlot.js`); when it is missing the copy is skipped with a message. Bag and TYTX use the maintained npm packages `@genrojs/bag` and `@genrojs/tytx`, unconstrained and without a lockfile. Refresh them with `npm update --package-lock=false`.
 
 <a id="gdt-025-010"></a>
 
@@ -26,7 +26,7 @@ node build.mjs
 Block ID: **GDT-025-010**.
 
 ```sh
-node --test tests/protocol.test.mjs   # protocol, with the real Bag
+npm test                            # protocol and agent, with the real Bag
 node tests/feasibility.mjs            # inspector in an extension page, no eval
 node tests/e2e.mjs                    # extension in headless Chromium, panel as a tab
 node tests/devtools.mjs               # panel inside real DevTools, over CDP
@@ -34,7 +34,20 @@ node tests/devtools.mjs               # panel inside real DevTools, over CDP
 
 The browser tests need `npx playwright install chromium`. They enable the back/forward cache, which Playwright disables by default. `tests/devtools.mjs` reaches the DevTools frontend through an internal module path that can change between Chromium versions. Headless Chromium does not replace a check in Google Chrome: three defects were found only there (service worker shutdown, back/forward cache port errors and reconnection).
 
-With the Gramlot 0.2.0 runtime, the pinned panel libraries read the Data and Source rows but omit the Source wire metadata `__cls: "GramlotBuilderBag"`. Five e2e checks and three DevTools checks fail on exact Source TYTX comparisons, also on the unmodified baseline. Dependency upgrades require a separate decision.
+Verified 2026-10-14: the agent uses `gramlot.src.source` and the fixture uses
+`app.src.startSource`. With Bag 0.10.3 and TYTX 0.16.2, all 14 unit tests,
+the extension build, feasibility check, 27 e2e checks and eight real-DevTools
+checks pass. Exact Source TYTX comparisons retain `__cls: "GramlotBuilderBag"`;
+no comparison was weakened or skipped. Coverage includes live edits, reloads,
+frame selection, strict CSP and cleanup. Reload the unpacked extension and reopen
+DevTools to activate the rebuilt bundles. Local standalone files still require
+file-URL permission; direct file-origin behavior was not browser-qualified.
+
+**Historical record — 2026-10-14:** the old panel dependencies (Bag 0.5.3 and
+TYTX 0.15.1) omitted the Source subtype metadata, causing five e2e and three
+DevTools failures. The owner explicitly requested updating the panel libraries
+and fixing these eight tests. The maintained dependencies and passive subtype
+registration now resolve those failures.
 
 <a id="gdt-025-015"></a>
 
@@ -50,7 +63,7 @@ Block ID: **GDT-025-015**.
 
 Block ID: **GDT-025-020**.
 
-Releases need owner authorization. Push a tag `v<version>` equal to `version` in `src/manifest.json`. The workflow `.github/workflows/release.yml` runs the protocol tests, builds `dist/`, zips it without the `feasibility.*` files and attaches `gramlot-devtools-<version>.zip` to a GitHub release.
+Releases need owner authorization. Push a tag `v<version>` equal to `version` in `src/manifest.json`. The workflow `.github/workflows/release.yml` runs the protocol and agent tests, builds `dist/`, zips it without the `feasibility.*` files and attaches `gramlot-devtools-<version>.zip` to a GitHub release.
 
 <a id="gdt-025-025"></a>
 

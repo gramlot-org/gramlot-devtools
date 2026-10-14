@@ -2,7 +2,7 @@
 /**
  * Page agent, injected by the extension in the MAIN world of the inspected tab.
  *
- * It uses only `window.gramlot`, `gramlot.data`, `gramlot.source` and public
+ * It uses only `window.gramlot`, `gramlot.data`, `gramlot.src.source` and public
  * Bag APIs. It bundles no Bag or TYTX library: values are encoded with the
  * Bag class of the page (`gramlot.data.constructor`).
  * It talks to the content script through window.postMessage; a message is
@@ -46,8 +46,8 @@ function install() {
     visibilityObserver.observe(document.documentElement);
     const current = () => {
         const gramlot = window.gramlot;
-        const valid = gramlot && gramlot.state !== 'disposed' && gramlot.data && gramlot.source
-            && typeof gramlot.data.subscribe === 'function' && typeof gramlot.source.subscribe === 'function';
+        const valid = gramlot && gramlot.state !== 'disposed' && gramlot.data && gramlot.src?.source
+            && typeof gramlot.data.subscribe === 'function' && typeof gramlot.src.source.subscribe === 'function';
         if (!valid) return null;
         if (!ids.has(gramlot)) ids.set(gramlot, `gramlot-${nextInstance++}`);
         return {instanceId: ids.get(gramlot), gramlot};
@@ -55,7 +55,7 @@ function install() {
     const bagOf = (instanceId, root) => {
         if (!tracked || tracked.instanceId !== instanceId) throw new Error(`Unknown Gramlot instance: ${instanceId}`);
         if (!ROOTS.includes(root)) throw new Error(`Unknown root: ${root}`);
-        return tracked.gramlot[root];
+        return root === 'source' ? tracked.gramlot.src.source : tracked.gramlot.data;
     };
     const nodeOf = (payload) => {
         const node = bagOf(payload.instanceId, payload.root).getNode(payload.path);
@@ -63,7 +63,8 @@ function install() {
         return node;
     };
     const BagClass = () => tracked.gramlot.data.constructor;
-    const bagClasses = () => ({X: BagClass(), XS: tracked.gramlot.source.constructor});
+    // Current Bags share suffix X; their registered subtypes carry Source identity.
+    const bagClasses = () => ({X: BagClass()});
 
     /**
      * Replace the breakpoint set (legacy genro._debugPaths). A condition is a

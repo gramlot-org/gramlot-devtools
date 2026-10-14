@@ -1,6 +1,6 @@
 // Copyright 2026 Softwell S.r.l. - SPDX-License-Identifier: Apache-2.0
 /**
- * Protocol unit tests with the real @jsr/genro__bag used by Gramlot.
+ * Protocol unit tests with the real @genrojs/bag used by Gramlot.
  * Run: `node --test tests/protocol.test.mjs`.
  */
 import test from 'node:test';
@@ -10,8 +10,8 @@ import {
     changesFromEvent, applyChange, splitPath,
 } from '../src/protocol.js';
 
-import {Bag} from '@jsr/genro__bag';
-import {createDecimal, isDecimal} from '@jsr/genro__tytx';
+import {Bag} from '@genrojs/bag';
+import {createDecimal, isDecimal} from '@genrojs/tytx';
 const CLASSES = {X: Bag};
 
 /** Page Bag + copy kept in sync through changesFromEvent/applyChange, as agent and panel do. */

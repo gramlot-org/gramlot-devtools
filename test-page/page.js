@@ -1,9 +1,9 @@
 // Copyright 2026 Softwell S.r.l. - SPDX-License-Identifier: Apache-2.0
 /**
  * Local Gramlot test page for the DevTools extension. No application server:
- * the Source is authored with GramlotBuilder and started with startSource(),
+ * the Source is authored with GramlotBuilder and started with src.startSource(),
  * Data is written with setItem(). window.gramlot is set as the real bootstrap
- * does (gramlot/src/gramlot/server/host.py). vendor/gramlot.js is a copy of
+ * does through PageBootstrap. vendor/gramlot.js is a copy of
  * the Gramlot runtime made by ../build.mjs.
  */
 import {Gramlot, GramlotBuilder} from './vendor/gramlot.js';
@@ -18,7 +18,7 @@ box.p('Edit my class from the Gramlot panel.', {id: 'note', class: 'plain'});
 
 const app = new Gramlot({document, transport: false, element: document.getElementById('gramlot-root')});
 window.gramlot = app;
-app.startSource(authored.toTytx());
+app.src.startSource(authored.toTytx());
 app.data.setItem('customer.name', 'Ada');
 app.data.setItem('customer.born', new Date(Date.UTC(1815, 11, 10)), {note: 'birth date'});
 app.data.setItem('customer.active', true);

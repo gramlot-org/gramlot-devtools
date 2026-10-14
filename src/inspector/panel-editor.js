@@ -5,8 +5,8 @@
 // the (copied) Bag. It hands the edit to `sink.commit(...)`, which sends it to
 // the inspected page. The copy changes only when the page reports the change
 // back (no optimistic update), so the editor then reloads from the copy.
-import {Bag} from 'genro-bag-js';
-import {toTytx, fromTytx, isDecimal, createDecimal} from 'genro-tytx';
+import {Bag} from '@genrojs/bag';
+import {toTytx, fromTytx, isDecimal, createDecimal} from '@genrojs/tytx';
 // Reference delete glyph: relationTree favorite removal.
 const REMOVE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M5 6l1 14a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1l1-14M10 10v7M14 10v7"/></svg>';
 /** Typed property grid. Leaving a row commits validated edits through Bag APIs. */

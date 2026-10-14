@@ -18,8 +18,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm ci --no-fund --no-audit
-      - run: node --test tests/protocol.test.mjs
+      - run: npm install --package-lock=false --no-fund --no-audit
+      - run: npm test
       - run: node build.mjs
   documentation:
     runs-on: ubuntu-latest

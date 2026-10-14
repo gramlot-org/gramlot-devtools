@@ -128,7 +128,7 @@ try {
     await panel.send('Log.enable');
     const snapshotsDone = `globalThis.gramlotDevtools?.instanceId && gramlotDevtools.log.filter(t => t === 'snapshot').length >= 2`;
     const same = async () => {
-        const pageWire = await page.evaluate(() => ({data: gramlot.data.toTytx('json'), source: gramlot.source.toTytx('json')}));
+        const pageWire = await page.evaluate(() => ({data: gramlot.data.toTytx('json'), source: gramlot.src.source.toTytx('json')}));
         const copyWire = await panel.evaluate(`({data: gramlotDevtools.tool.scopes.data.bag.toTytx('json'),
             source: gramlotDevtools.tool.scopes.source.bag.toTytx('json')})`);
         assert.equal(copyWire.data, pageWire.data);
@@ -183,7 +183,7 @@ try {
         await browser.send('Target.closeTarget', {targetId: devtools.id});
         browser.close();
         await page.waitForFunction(() => !window[Symbol.for('gramlot-devtools.agent')], null, {timeout: 5000});
-        const left = await page.evaluate(() => [gramlot.data, gramlot.source].flatMap(bag =>
+        const left = await page.evaluate(() => [gramlot.data, gramlot.src.source].flatMap(bag =>
             [bag._updSubscribers, bag._insSubscribers, bag._delSubscribers].flatMap(Object.keys)).filter(id => id === 'gramlot-devtools'));
         assert.deepEqual(left, []);
     });

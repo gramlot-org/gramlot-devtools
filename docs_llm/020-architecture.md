@@ -26,6 +26,11 @@ Shape `{channel: 'gramlot-devtools', v: 1, id, type, payload}`. Page → panel: 
 
 Block ID: **GDT-020-015**.
 
+The panel registers the wire subtype `GramlotBuilderBag` with TYTX under `X`,
+mapped to `GramlotSourceCopy`, a passive Bag subclass. This preserves the Source
+class metadata on decode and re-encode without attaching a renderer or builder.
+Plain Data Bags keep their own subtype.
+
 Copies change only from `snapshot`/`change`; edits are commands; no optimistic update; a change that cannot be applied triggers a new snapshot.
 
 <a id="gdt-020-020"></a>
