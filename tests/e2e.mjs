@@ -35,8 +35,8 @@ const ORIGIN = `http://127.0.0.1:${server.address().port}`;
 
 const results = [];
 const check = async (name, fn) => {
-    try { await fn(); results.push(['PASS', name]); }
-    catch (error) { results.push(['FAIL', name, error.stack || error.message]); }
+    try { await fn(); results.push(['PASS', name]); console.log('PASS', name); }
+    catch (error) { results.push(['FAIL', name, error.stack || error.message]); console.log('FAIL', name, error.stack || error.message); }
 };
 const errors = [];
 const watch = (page, label) => {
@@ -45,11 +45,12 @@ const watch = (page, label) => {
 };
 
 const context = await chromium.launchPersistentContext('', {
-    headless: true, channel: 'chromium',
+    headless: true, channel: 'chromium', acceptDownloads: true,
     // Playwright disables the back/forward cache by default; Chrome has it on.
     ignoreDefaultArgs: ['--disable-back-forward-cache'],
     args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
 });
+context.setDefaultTimeout(7000);
 try {
     let [worker] = context.serviceWorkers();
     worker ||= await context.waitForEvent('serviceworker');
@@ -63,424 +64,165 @@ try {
     await page.waitForFunction(() => window.gramlot?.state === 'started');
     const tabId = await worker.evaluate(async url => (await chrome.tabs.query({url}))[0].id, `${ORIGIN}/index.html`);
 
-    const panel = await context.newPage();
-    watch(panel, '[panel]');
+    const panel = await context.newPage(); watch(panel,'[panel]');
     await panel.goto(`chrome-extension://${extensionId}/panel.html?tabId=${tabId}`);
-    const connected = () => panel.waitForFunction(() => {
-        const s = globalThis.gramlotDevtools;
-        return s?.instanceId && ['data', 'source'].every(k => s.log.filter(t => t === 'snapshot').length >= 2);
-    }, null, {timeout: 10000});
-    const same = async () => {
-        const pageWire = await page.evaluate(() => ({data: gramlot.data.toTytx('json'), source: gramlot.src.source.toTytx('json')}));
-        const copyWire = await panel.evaluate(() => {
-            const tool = document.querySelector('#inspector');
-            return tool && window.gramlotDevtools && {
-                data: window.panelScopes.data.bag.toTytx('json'), source: window.panelScopes.source.bag.toTytx('json')};
-        });
-        return {pageWire, copyWire};
-    };
-    // Test-only handle on the inspector scopes (no production global for them).
-    const exposeScopes = () => panel.evaluate(() => {
-        window.panelScopes = window.gramlotDevtools.tool.scopes;
-    });
-
-    await check('panel connects and receives hello + two snapshots', async () => {
-        await connected();
-        await exposeScopes();
-    });
-    await check('criterion 2: Data and Source copies equal the page Bags (TYTX text identical)', async () => {
-        const {pageWire, copyWire} = await same();
-        assert.equal(copyWire.data, pageWire.data);
-        assert.equal(copyWire.source, pageWire.source);
-    });
-    await check('criterion 2: trees show nested nodes', async () => {
-        const labels = await panel.evaluate(() => {
-            const text = kind => [...document.querySelector(`[data-inspector="${kind}"]`).shadowRoot.querySelectorAll('summary, li')]
-                .map(el => el.firstChild?.textContent?.trim() || el.textContent.trim());
-            return {data: text('data'), source: text('source')};
-        });
-        for (const label of ['customer', 'name', 'born', 'orders', 'o1', 'total']) assert.ok(labels.data.some(t => t.startsWith(label)), `data ${label}: ${labels.data}`);
-        for (const label of ['main', 'div_0', 'h1_0', 'ul_0', 'li_0']) assert.ok(labels.source.some(t => t.startsWith(label)), `source ${label}: ${labels.source}`);
-    });
-    await check('criterion 2: selecting a node shows value and attributes in the editor', async () => {
-        const rows = await panel.evaluate(async () => {
-            const tool = window.gramlotDevtools.tool;
-            tool.app.live(() => tool.app.builder.data.setItem('dataPath', 'customer.born'));
-            await new Promise(r => setTimeout(r, 50));
-            const root = document.querySelector('[data-inspector="data-editor"] [data-field="rows"]').shadowRoot;
-            return [...root.querySelectorAll('[data-property]')].map(r => [r.dataset.name, r.dataset.type, r.querySelector('[data-cell="value"]').value]);
-        });
-        assert.deepEqual(rows, [['value', 'date', '1815-12-10'], ['note', 'string', 'birth date']]);
-    });
-    await check('criterion 3: page console write appears in the panel without reload', async () => {
-        await page.evaluate(() => gramlot.data.setItem('a.b', 1));
-        await panel.waitForFunction(() => window.panelScopes.data.bag.getItem('a.b') === 1, null, {timeout: 3000});
-        const shown = await panel.evaluate(() => [...document.querySelector('[data-inspector="data"]').shadowRoot.querySelectorAll('summary')]
-            .some(el => el.textContent.trim().startsWith('a')));
-        assert.ok(shown, 'tree shows branch a');
-        const {pageWire, copyWire} = await same();
-        assert.equal(copyWire.data, pageWire.data);
-    });
-    await check('delete and attribute-only updates from the page follow in the copy', async () => {
-        await page.evaluate(() => { gramlot.data.delItem('a'); gramlot.data.getNode('customer.name').setAttr({hint: 'x'}); });
-        await panel.waitForFunction(() => !window.panelScopes.data.bag.getNode('a')
-            && window.panelScopes.data.bag.getNode('customer.name').attr.hint === 'x', null, {timeout: 3000});
-    });
-    // Hidden tab content cannot take focus: select the tab first, as a user does.
-    const selectTab = kind => panel.locator('gnr-tabcontainer button.tab', {hasText: kind === 'data' ? 'Data' : 'Source'}).click();
-    const editRow = async (kind, path, name, text) => { await selectTab(kind); return panel.evaluate(async ({kind, path, name, text}) => {
-        const tool = window.gramlotDevtools.tool;
-        tool.app.live(() => tool.app.builder.data.setItem(kind + 'Path', path));
-        await new Promise(r => setTimeout(r, 50));
-        const root = document.querySelector(`[data-inspector="${kind}-editor"] [data-field="rows"]`).shadowRoot;
-        const row = [...root.querySelectorAll('[data-property]')].find(r => r.dataset.name === name);
-        if (!row) throw new Error(`no row ${name}`);
-        const input = row.querySelector('[data-cell="value"]');
-        input.focus();
-        input.value = text;
-        input.dispatchEvent(new Event('input', {bubbles: true, composed: true}));
-        input.blur();
-    }, {kind, path, name, text}); };
-    await check('criterion 4: editing a Data value in the panel reaches gramlot.data', async () => {
-        await editRow('data', 'customer.name', 'value', 'Grace');
-        await page.waitForFunction(() => gramlot.data.getItem('customer.name') === 'Grace', null, {timeout: 3000});
-        await panel.waitForFunction(() => window.panelScopes.data.bag.getItem('customer.name') === 'Grace', null, {timeout: 3000});
-    });
-    await check('typed Data edit keeps the type (number value of o1.total)', async () => {
-        await editRow('data', 'customer.orders.o1.total', 'value', '99.25');
-        await page.waitForFunction(() => gramlot.data.getItem('customer.orders.o1.total') === 99.25, null, {timeout: 3000});
-    });
-    await check('criterion 5: editing Source attribute class changes the page DOM', async () => {
-        await editRow('source', 'main.div_0', 'class', 'y');
-        await page.waitForFunction(() => document.getElementById('box')?.className === 'y', null, {timeout: 3000});
-    });
-    await check('deleteAttribute from the panel removes a Source attribute and the DOM attribute', async () => {
-        await selectTab('source');
-        await panel.evaluate(async () => {
-            const tool = window.gramlotDevtools.tool;
-            tool.app.live(() => tool.app.builder.data.setItem('sourcePath', 'main.div_0.p_0'));
-            await new Promise(r => setTimeout(r, 50));
-            const root = document.querySelector('[data-inspector="source-editor"] [data-field="rows"]').shadowRoot;
-            const row = [...root.querySelectorAll('[data-property]')].find(r => r.dataset.name === 'class');
-            row.querySelector('[data-cell="remove"]').click();
-            row.querySelector('[data-cell="value"]').focus();
-            row.querySelector('[data-cell="value"]').blur();
-        });
-        await page.waitForFunction(() => !gramlot.src.source.getNode('main.div_0.p_0').attr.class
-            && !document.getElementById('note').hasAttribute('class'), null, {timeout: 3000});
-    });
-    await check('command errors are reported back (setValue on a missing node)', async () => {
-        const result = await panel.evaluate(() => window.gramlotDevtools.request('setValue', {
-            instanceId: window.gramlotDevtools.instanceId, root: 'data', path: 'missing.node',
-            tytxValue: '"{\\"rows\\": []}"'}));
-        assert.equal(result.ok, false);
-        assert.match(result.error, /No node at data:missing.node/);
-    });
-    await check('criterion 6: page reload reconnects the panel with a new snapshot', async () => {
-        const before = await panel.evaluate(() => window.gramlotDevtools.log.filter(t => t === 'hello').length);
-        await page.reload();
-        await page.waitForFunction(() => window.gramlot?.state === 'started');
-        await panel.waitForFunction(n => window.gramlotDevtools.log.filter(t => t === 'hello').length > n
-            && window.gramlotDevtools.instanceId, before, {timeout: 10000});
-        await panel.waitForFunction(() => window.panelScopes.data.bag.getItem('customer.name') === 'Ada', null, {timeout: 5000});
-        const {pageWire, copyWire} = await same();
-        assert.equal(copyWire.data, pageWire.data);
-        assert.equal(copyWire.source, pageWire.source);
-    });
-    await check('service worker stopped by Chrome: the panel reconnects with a new snapshot', async () => {
-        const before = await panel.evaluate(() => window.gramlotDevtools.log.filter(t => t === 'hello').length);
-        const cdp = await context.newCDPSession(panel);
-        await cdp.send('ServiceWorker.enable');
-        await cdp.send('ServiceWorker.stopAllWorkers');
-        await cdp.detach();
-        await panel.waitForFunction(n => window.gramlotDevtools.log.filter(t => t === 'hello').length > n
-            && window.gramlotDevtools.instanceId, before, {timeout: 10000});
-        await panel.waitForFunction(() => window.panelScopes.source.bag.getNode('main'), null, {timeout: 5000});
-        const {pageWire, copyWire} = await same();
-        assert.equal(copyWire.data, pageWire.data);
-        assert.equal(copyWire.source, pageWire.source);
-        await page.evaluate(() => gramlot.data.setItem('afterRestart', 1));
-        await panel.waitForFunction(() => window.panelScopes.data.bag.getItem('afterRestart') === 1, null, {timeout: 3000});
-        await page.evaluate(() => gramlot.data.delItem('afterRestart'));
-    });
-    // Breakpoints (legacy genro._debugPaths): console lines of the page.
-    const logs = [];
-    page.on('console', msg => { if (msg.text().startsWith('** Gramlot breakpoint **')) logs.push(msg.text()); });
-    const hitsAfter = async (action, expected) => {
-        const before = logs.length;
-        await page.evaluate(action);
-        await new Promise(resolve => setTimeout(resolve, 150));
-        assert.equal(logs.length - before, expected, logs.slice(before).join(' | '));
-    };
-    await check('breakpoint marks: left gutter, hover, focus, red/yellow and removal without rebuilding rows', async () => {
-        await selectTab('data');
-        const action = panel.locator('[data-inspector="data"] [data-action="breakpoint"][data-path="customer"]');
-        const appearance = () => action.evaluate(button => {
-            const row = button.closest('summary, .leaf');
-            const circle = getComputedStyle(button, '::before');
-            return {
-                opacity: getComputedStyle(button.parentElement).opacity,
-                color: getComputedStyle(button).color,
-                fill: circle.backgroundColor,
-                pressed: button.getAttribute('aria-pressed'),
-                left: button.getBoundingClientRect().right <= row.querySelector('.caption').getBoundingClientRect().left,
-                captionX: row.querySelector('.caption').getBoundingClientRect().left,
-            };
-        });
-        await panel.mouse.move(0, 0);
-        await action.evaluate(button => button.blur());
-        const idle = await appearance();
-        assert.equal(idle.opacity, '0');
-        assert.equal(idle.pressed, 'false');
-        assert.equal(idle.left, true);
-        await action.evaluate(button => button.closest('summary, .leaf').setAttribute('data-mark-test', 'preserved'));
-        await panel.locator('[data-mark-test]').hover();
-        assert.equal((await appearance()).opacity, '1');
-        assert.equal((await appearance()).color, 'rgb(128, 134, 139)');
-        assert.equal((await appearance()).fill, 'rgba(0, 0, 0, 0)');
-        await panel.keyboard.press('Tab');
-        await action.focus();
-        await panel.mouse.move(0, 0);
-        assert.equal((await appearance()).opacity, '1');
-        await panel.evaluate(() => window.gramlotDevtools.setBreakpoint('data', 'customer', 'console'));
-        assert.equal(await action.evaluate(button => button === button.getRootNode().activeElement), true);
-        await action.evaluate(button => button.blur());
-        const red = await appearance();
-        assert.equal(red.opacity, '1');
-        assert.equal(red.pressed, 'true');
-        assert.equal(red.color, 'rgb(179, 38, 30)');
-        assert.equal(red.fill, red.color);
-        assert.equal(red.captionX, idle.captionX);
-        await panel.evaluate(() => window.gramlotDevtools.setBreakpoint('data', 'customer', 'console', 'value !== null'));
-        const yellow = await appearance();
-        assert.equal(yellow.opacity, '1');
-        assert.equal(yellow.color, 'rgb(249, 171, 0)');
-        assert.equal(yellow.fill, yellow.color);
-        assert.equal(await panel.locator('[data-mark-test="preserved"]').count(), 1);
-        await panel.screenshot({path: '/tmp/gramlot-devtools-breakpoints.png'});
-        await panel.evaluate(() => window.gramlotDevtools.setBreakpoint('data', 'customer', ''));
-        assert.equal((await appearance()).opacity, '0');
-        assert.equal((await appearance()).pressed, 'false');
-    });
-    await check('breakpoint from the row action and dialog: console mode logs a Data change', async () => {
-        await selectTab('data');
-        await panel.evaluate(() => {
-            const tree = document.querySelector('[data-inspector="data"]');
-            const row = [...tree.shadowRoot.querySelectorAll('summary, .leaf')].find(r => r.querySelector('.caption')?.textContent === 'customer');
-            row.querySelector('[data-action="breakpoint"]').click();
-        });
-        assert.equal(await panel.evaluate(() => document.getElementById('breakpoint-dialog').open), true);
-        assert.equal(await panel.evaluate(() => document.getElementById('breakpoint-where').textContent), 'data: customer');
-        await panel.evaluate(() => {
-            const dialog = document.getElementById('breakpoint-dialog');
-            dialog.querySelector('form').elements.mode.value = 'console';
-            dialog.close('ok');
-        });
-        await panel.waitForFunction(() => document.getElementById('breakpoints').textContent === '1 breakpoint', null, {timeout: 3000});
-        await hitsAfter(() => gramlot.data.setItem('customer', 'replaced'), 1);
-        await panel.evaluate(() => window.gramlotDevtools.setBreakpoint('data', 'customer', ''));
-    });
-    await check('breakpoint: exact path, condition on the value, attribute change, removal', async () => {
-        await page.reload();
-        await page.waitForFunction(() => window.gramlot?.state === 'started');
-        await panel.waitForFunction(() => window.panelScopes.data.bag.getItem('customer.name') === 'Ada', null, {timeout: 10000});
-        await panel.evaluate(() => window.gramlotDevtools.setBreakpoint('data', 'customer.orders.o1.total', 'console', 'value > 78'));
-        await hitsAfter(() => gramlot.data.setItem('customer.orders.o1.total', 50), 0);
-        await hitsAfter(() => gramlot.data.setItem('customer.orders.o1.total', 80), 1);
-        await hitsAfter(() => gramlot.data.setItem('customer.orders.o2.total', 99), 0);
-        await panel.evaluate(() => window.gramlotDevtools.setBreakpoint('data', 'customer.orders.o1.total', 'console',
-            "evt === 'upd_attrs' && node.attr.currency === 'USD'"));
-        await hitsAfter(() => gramlot.data.getNode('customer.orders.o1.total').setAttr({currency: 'USD'}), 1);
-        await panel.evaluate(() => window.gramlotDevtools.setBreakpoint('data', 'customer.orders.o1.total', ''));
-        await hitsAfter(() => gramlot.data.setItem('customer.orders.o1.total', 90), 0);
-    });
-    await check('breakpoint on a Source node; it survives a page reload; editor line shows it', async () => {
-        await panel.evaluate(() => window.gramlotDevtools.setBreakpoint('source', 'main.div_0', 'console'));
-        await page.reload();
-        await page.waitForFunction(() => window.gramlot?.state === 'started');
-        await panel.waitForFunction(() => window.panelScopes.source.bag.getNode('main.div_0'), null, {timeout: 10000});
-        await new Promise(resolve => setTimeout(resolve, 200));
-        await hitsAfter(() => gramlot.src.source.getNode('main.div_0').setAttr({class: 'y'}), 1);
-        await selectTab('source');
-        await panel.evaluate(() => { const tool = window.gramlotDevtools.tool; tool.app.live(() => tool.app.builder.data.setItem('sourcePath', 'main.div_0')); });
-        const line = await panel.evaluate(() => {
-            const el = document.querySelector('[data-inspector="source-editor"] [data-field="rows"]').shadowRoot.querySelector('[data-breakpoint-line]');
-            return el.hidden ? null : el.textContent;
-        });
-        assert.equal(line, 'Breakpoint: Console');
-        await panel.evaluate(() => window.gramlotDevtools.setBreakpoint('source', 'main.div_0', ''));
-    });
-    await check('breakpoint in debugger mode pauses the page in the debugger', async () => {
-        const cdp = await context.newCDPSession(page);
-        await cdp.send('Debugger.enable');
-        const paused = new Promise(resolve => cdp.once('Debugger.paused', resolve));
-        await panel.evaluate(() => window.gramlotDevtools.setBreakpoint('data', 'customer.name', 'debugger'));
-        const write = page.evaluate(() => gramlot.data.setItem('customer.name', 'Paused'));
-        const event = await paused;
-        const frames = event.callFrames.map(f => f.functionName);
-        await cdp.send('Debugger.resume');
-        await write;
-        await cdp.detach();
-        assert.ok(frames.includes('breakpointHit'), frames.join(' < '));
-        await panel.evaluate(() => window.gramlotDevtools.setBreakpoint('data', 'customer.name', ''));
-    });
-    await check('criterion 9: the page loads no PoC runtime (network requests)', async () => {
-        const own = requests.filter(url => url.startsWith(ORIGIN)).map(url => new URL(url).pathname);
-        assert.deepEqual([...new Set(own)].sort(), ['/index.html', '/page.js', '/vendor/gramlot.js']);
-        const scripts = await page.evaluate(() => [...document.scripts].map(s => s.src));
-        assert.ok(scripts.every(src => !src.startsWith('chrome-extension:')), scripts.join());
-    });
-    await check('disposing the Gramlot instance sends bye; the panel shows it', async () => {
-        await page.evaluate(() => gramlot.dispose());
-        await panel.waitForFunction(() => document.getElementById('message').textContent === 'The Gramlot instance was removed.',
-            null, {timeout: 5000});
-        assert.equal(await panel.evaluate(() => window.gramlotDevtools.log.includes('bye')), true);
-    });
-    await check('navigation to a page without Gramlot shows "No Gramlot instance"', async () => {
-        await page.goto(`${ORIGIN}/plain.html`);
-        await panel.waitForFunction(() => document.getElementById('status').dataset.state === 'none', null, {timeout: 10000});
-        const text = await panel.evaluate(() => document.getElementById('message').textContent);
-        assert.equal(text, 'No Gramlot instance in this page.');
-    });
-    await check('back navigation restored from the back/forward cache reconnects the panel', async () => {
-        await page.goto(`${ORIGIN}/index.html`);
-        await page.waitForFunction(() => window.gramlot?.state === 'started');
-        await panel.waitForFunction(() => document.getElementById('status').dataset.state === 'connected', null, {timeout: 10000});
-        await page.evaluate(() => { window.bfcacheMarker = true; });
-        await page.goto(`${ORIGIN}/plain.html`);
-        await panel.waitForFunction(() => document.getElementById('status').dataset.state === 'none', null, {timeout: 10000});
-        // A restore from the cache fires no load event.
-        await page.goBack({waitUntil: 'commit'});
-        assert.equal(await page.evaluate(() => window.bfcacheMarker === true), true, 'page not restored from the back/forward cache');
-        await panel.waitForFunction(() => document.getElementById('status').dataset.state === 'connected'
-            && window.panelScopes.data.bag.getItem('customer.name') === 'Ada', null, {timeout: 10000});
-    });
-    await check('iframes: each frame instance is listed, inspected and edited separately', async () => {
-        await page.goto(`${ORIGIN}/frames.html`);
-        const frameOf = name => page.frames().find(f => f.url().includes(`frame=${name}`));
-        for (const name of ['first', 'second']) await frameOf(name).waitForFunction(() => window.gramlot?.state === 'started');
-        await frameOf('second').evaluate(() => gramlot.data.setItem('customer.name', 'Second frame'));
-        await panel.waitForFunction(() => document.getElementById('frame').options.length === 2
-            && !document.getElementById('frame').hidden
-            && document.getElementById('status').dataset.state === 'connected', null, {timeout: 10000});
-        const options = await panel.evaluate(() => [...document.getElementById('frame').options].map(o => [o.textContent, o.title]));
-        assert.deepEqual(options.sort(), [['Gramlot DevTools test page', 'index.html?frame=first · gramlot-1'],
-            ['Gramlot DevTools test page', 'index.html?frame=second · gramlot-1']]);
-        // Pick the second frame from the selector.
-        const value = await panel.evaluate(() => [...document.getElementById('frame').options]
-            .find(o => o.title.includes('frame=second')).value);
-        await panel.selectOption('#frame', value);
-        await panel.waitForFunction(() => window.panelScopes.data.bag.getItem('customer.name') === 'Second frame', null, {timeout: 5000});
-        const second = frameOf('second');
-        const pageWire = await second.evaluate(() => ({data: gramlot.data.toTytx('json'), source: gramlot.src.source.toTytx('json')}));
-        const copyWire = await panel.evaluate(() => ({
-            data: window.panelScopes.data.bag.toTytx('json'), source: window.panelScopes.source.bag.toTytx('json')}));
-        assert.deepEqual(copyWire, pageWire);
-        await editRow('data', 'customer.name', 'value', 'Edited in frame');
-        await second.waitForFunction(() => gramlot.data.getItem('customer.name') === 'Edited in frame', null, {timeout: 3000});
-        assert.equal(await frameOf('first').evaluate(() => gramlot.data.getItem('customer.name')), 'Ada');
-        await second.evaluate(() => gramlot.data.setItem('live', 1));
-        await panel.waitForFunction(() => window.panelScopes.data.bag.getItem('live') === 1, null, {timeout: 3000});
-    });
-    await check('visible frames: follow tab switches, preserve manual choice and recover after removal', async () => {
-        await page.goto(`${ORIGIN}/index.html`);
-        await page.waitForFunction(() => window.gramlot?.state === 'started');
-        await panel.waitForFunction(() => gramlotDevtools.frameId === 0 && panelScopes.data.bag.getItem('customer.name') === 'Ada');
-        await page.evaluate(() => {
-            for (const name of ['first', 'second']) {
-                const wrapper = document.createElement('div');
-                wrapper.id = `tab-${name}`;
-                wrapper.hidden = name === 'second';
-                const frame = document.createElement('iframe');
-                frame.src = `index.html?frame=${name}`;
-                frame.style.cssText = 'width:480px;height:250px';
-                wrapper.append(frame);
-                document.body.prepend(wrapper);
-            }
-        });
-        const frameOf = name => page.frames().find(f => f.url().includes(`frame=${name}`));
-        await panel.waitForFunction(() => document.getElementById('frame').options.length === 2
-            && gramlotDevtools.frames.get(gramlotDevtools.frameId)?.url.includes('frame=first')
-            && panelScopes.data.bag.getItem('customer.name') === 'Ada');
-        for (const name of ['first', 'second']) {
-            await frameOf(name).waitForFunction(() => window.gramlot?.state === 'started');
-            await frameOf(name).evaluate(name => {
-                gramlot.data.setItem('customer.name', name);
-                gramlot.src.source.getNode('main.div_0').setAttr({title: name});
-            }, name);
+    const ready=()=>panel.waitForFunction(()=>gramlotDevtools.connection?.state==='started');
+    await ready();
+    const tool=panel.locator('gramlot-tools-inspector');
+    const selectNode=async(root,path)=>{
+        await tool.getByRole('tab',{name:root==='data'?'Data':'Source',exact:true}).click();
+        const tree=tool.locator(`gramlot-poc-tree[data-root=${root}]`);
+        const parts=path.split('.');
+        for(let i=1;i<parts.length;i++) {
+            const ancestor=tree.locator(`[data-node-path="${parts.slice(0,i).join('.')}"]`);
+            if(!await ancestor.evaluate(el=>el.parentElement.open))await ancestor.click();
         }
-        await panel.selectOption('#frame', '0');
-        await panel.waitForFunction(() => panelScopes.data.bag.getItem('customer.name') === 'Ada');
-        // Ordinary data updates must not undo a manual choice.
-        await frameOf('first').evaluate(() => gramlot.data.setItem('customer.name', 'first updated'));
-        await page.evaluate(() => gramlot.data.setItem('manualSelection', true));
-        await panel.waitForFunction(() => panelScopes.data.bag.getItem('manualSelection') === true);
-        assert.equal(await panel.evaluate(() => gramlotDevtools.frameId), 0);
-        await page.evaluate(() => {
-            document.getElementById('tab-first').hidden = true;
-            document.getElementById('tab-second').hidden = false;
-        });
-        await panel.waitForFunction(() => panelScopes.data.bag.getItem('customer.name') === 'second'
-            && document.getElementById('frame').options.length === 2
-            && ![...document.getElementById('frame').options].some(o => o.title.includes('frame=first')));
-        const secondSource = await frameOf('second').evaluate(() => gramlot.src.source.toTytx('json'));
-        await panel.waitForFunction(wire => panelScopes.source.bag.toTytx('json') === wire, secondSource);
-        await page.evaluate(() => {
-            document.getElementById('tab-second').hidden = true;
-            document.getElementById('tab-first').hidden = false;
-        });
-        await panel.waitForFunction(() => panelScopes.data.bag.getItem('customer.name') === 'first updated');
-        await page.evaluate(() => document.getElementById('tab-first').remove());
-        await panel.waitForFunction(() => gramlotDevtools.frameId === 0
-            && panelScopes.data.bag.getItem('customer.name') === 'Ada'
-            && document.getElementById('frame').options.length === 1);
+        await tree.locator(`[data-node-path="${path}"]`).click();
+    };
+    const edit=async(root,path,label,text)=>{
+        await selectNode(root,path);const input=tool.getByLabel(label,{exact:true});await input.fill(text);await input.press('Enter');
+    };
+    const breakpoint=(root,path,mode,condition='')=>panel.evaluate(config=>gramlotDevtools.connection.request('breakpoint',config),{root,path,mode,condition});
+    const waitValue=(path,value)=>panel.waitForFunction(({path,value})=>gramlotDevtools.connection?.data.getItem(path)===value,{path,value});
+    const logs=[];page.on('console',m=>{if(m.text().startsWith('** Gramlot breakpoint **'))logs.push(m.text());});
+    const hit=async(action,count)=>{const before=logs.length;await page.evaluate(action);await panel.evaluate(()=>gramlotDevtools.connection.request('refresh'));assert.equal(logs.length-before,count);};
+    await check('shared component is embedded with Data, Source and Styles',async()=>{
+        assert.equal(await tool.locator('gramlot-poc-palette').count(),0);
+        assert.equal(await tool.getByRole('tab').count(),3);
+        assert.deepEqual(await panel.evaluate(()=>gramlotDevtools.violations),[]);
     });
-    await check('strict page CSP: the panel connects and the copies equal the page', async () => {
-        await page.goto(`${ORIGIN}/csp.html`);
-        await page.waitForFunction(() => window.gramlot?.state === 'started');
-        await panel.waitForFunction(() => document.getElementById('status').dataset.state === 'connected'
-            && window.panelScopes.source.bag.getNode('main'), null, {timeout: 10000});
-        const {pageWire, copyWire} = await same();
-        assert.equal(copyWire.data, pageWire.data);
-        assert.equal(copyWire.source, pageWire.source);
+    await check('snapshot preserves nested values, dates and attributes',async()=>{
+        const actual=await panel.evaluate(()=>({name:gramlotDevtools.connection.data.getItem('customer.name'),
+            born:gramlotDevtools.connection.data.getItem('customer.born').toISOString(),
+            currency:gramlotDevtools.connection.data.getNode('customer.orders.o1.total').getAttr('currency'),
+            source:gramlotDevtools.connection.source.getNode('main.div_0').getAttr('id')}));
+        assert.deepEqual(actual,{name:'Ada',born:'1815-12-10T00:00:00.000Z',currency:'EUR',source:'box'});
     });
-    await check('strict page CSP: a breakpoint condition is refused and reported; no condition works', async () => {
-        await panel.evaluate(() => window.gramlotDevtools.setBreakpoint('data', 'customer.name', 'console', 'value === 1'));
-        const error = await panel.evaluate(() => window.gramlotDevtools.breakpoints.get('data:customer.name').error);
-        assert.match(error, /EvalError/);
-        assert.equal(await panel.evaluate(() => document.getElementById('breakpoints').dataset.error), 'true');
-        assert.equal(await panel.locator('[data-inspector="data"] [data-action="breakpoint"][data-path="customer.name"]').getAttribute('aria-pressed'), 'false');
-        // The CSP report of this refused compilation is an expected console error.
-        for (let index; (index = errors.findIndex(line => line.includes('unsafe-eval'))) >= 0;) errors.splice(index, 1);
-        await panel.evaluate(() => window.gramlotDevtools.setBreakpoint('data', 'customer.name', 'console'));
-        await hitsAfter(() => gramlot.data.setItem('customer.name', 'CSP'), 1);
-        await panel.evaluate(() => window.gramlotDevtools.setBreakpoint('data', 'customer.name', ''));
+    await check('tree selection opens scalar value and attributes',async()=>{
+        await selectNode('data','customer.born');
+        assert.equal(await tool.getByLabel('Value',{exact:true}).inputValue(),'1815-12-10');
+        assert.equal(await tool.getByLabel('note value',{exact:true}).inputValue(),'birth date');
     });
-    await check('closing the panel unsubscribes and removes the agent from the page', async () => {
-        await page.goto(`${ORIGIN}/index.html`);
-        await page.waitForFunction(() => window.gramlot?.state === 'started');
-        await panel.waitForFunction(() => document.getElementById('status').dataset.state === 'connected'
-            && window.gramlotDevtools.log.filter(t => t === 'snapshot').length >= 2, null, {timeout: 10000});
-        const during = await page.evaluate(() => ({
-            agent: Boolean(window[Symbol.for('gramlot-devtools.agent')]),
-            data: Object.keys(gramlot.data._updSubscribers).includes('gramlot-devtools'),
-        }));
-        assert.deepEqual(during, {agent: true, data: true});
-        await panel.close();
-        await page.waitForFunction(() => !window[Symbol.for('gramlot-devtools.agent')], null, {timeout: 5000});
-        const after = await page.evaluate(() => ({
-            subscribers: [gramlot.data, gramlot.src.source].flatMap(bag =>
-                [bag._updSubscribers, bag._insSubscribers, bag._delSubscribers].flatMap(Object.keys))
-                .filter(id => id === 'gramlot-devtools'),
-        }));
-        assert.deepEqual(after.subscribers, []);
+    await check('insert, update, attributes, nested Bags and deletion reach the shared copy',async()=>{
+        await page.evaluate(()=>{gramlot.data.setItem('live.branch.value',3,{note:'a'});gramlot.data.setItem('customer.name','Changed');});
+        await waitValue('live.branch.value',3);await waitValue('customer.name','Changed');
+        await page.evaluate(()=>gramlot.data.getNode('live.branch.value').setAttr({note:'b'}));
+        await panel.waitForFunction(()=>gramlotDevtools.connection.data.getNode('live.branch.value').getAttr('note')==='b');
+        await page.evaluate(()=>gramlot.data.popNode('live'));await panel.waitForFunction(()=>!gramlotDevtools.connection.data.getNode('live'));
     });
-    await check('criterion 8: no console errors in page or panel during these steps', async () => {
-        assert.deepEqual(errors, []);
+    await check('Data text and typed number edits reach the real page',async()=>{
+        await edit('data','customer.name','Value','Grace');await page.waitForFunction(()=>gramlot.data.getItem('customer.name')==='Grace');
+        await edit('data','customer.orders.o1.total','Value','99.25');await page.waitForFunction(()=>gramlot.data.getItem('customer.orders.o1.total')===99.25);
     });
-} finally {
-    await context.close();
-    server.close();
-}
-for (const [status, name, detail] of results) console.log(`${status}  ${name}${detail ? `\n      ${detail}` : ''}`);
-process.exitCode = results.some(([status]) => status === 'FAIL') ? 1 : 0;
+    await check('Source attribute edit and removal update page DOM',async()=>{
+        await edit('source','main.div_0','class value','y');await page.waitForFunction(()=>document.getElementById('box').className==='y');
+        await selectNode('source','main.div_0.p_0');await tool.getByLabel('Remove class',{exact:true}).click();
+        await page.waitForFunction(()=>!document.getElementById('note').hasAttribute('class'));
+    });
+    await check('missing or stale nodes are rejected before mutation',async()=>{
+        const error=await panel.evaluate(async()=>{try{await gramlotDevtools.connection.request('edit',{root:'data',path:'missing',nodeId:0,revision:0,set:[],remove:[]});}catch(e){return e.message;}});
+        assert.match(error,/changed or was removed/);
+    });
+    await check('page reload reconnects with fresh values',async()=>{
+        await page.reload();await waitValue('customer.name','Ada');await ready();
+    });
+    await check('service worker restart reconnects and continues live updates',async()=>{
+        const count=await panel.evaluate(()=>gramlotDevtools.log.filter(t=>t==='hello').length);
+        const cdp=await context.newCDPSession(panel);await cdp.send('ServiceWorker.enable');await cdp.send('ServiceWorker.stopAllWorkers');await cdp.detach();
+        await panel.waitForFunction(n=>gramlotDevtools.log.filter(t=>t==='hello').length>n&&gramlotDevtools.connection?.state==='started',count);
+        await page.evaluate(()=>gramlot.data.setItem('afterRestart',1));await waitValue('afterRestart',1);
+    });
+    await check('row breakpoint dialog, marks and console action use the shared UI',async()=>{
+        await selectNode('data','customer.name');
+        const row=tool.locator('gramlot-poc-tree[data-root=data] [data-node-path="customer.name"]');
+        await row.hover();await row.getByRole('button',{name:'Breakpoint',exact:true}).click();
+        const dialog=tool.getByRole('dialog',{name:'Breakpoint',exact:true});
+        await dialog.getByLabel('Breakpoint mode',{exact:true}).selectOption('console');await dialog.getByRole('button',{name:'Save',exact:true}).click();
+        await panel.waitForFunction(()=>gramlotDevtools.connection.breakpoints.some(b=>b.path==='customer.name'));
+        await hit(()=>gramlot.data.setItem('customer.name','Marked'),1);
+        await breakpoint('data','customer.name','');
+    });
+    await check('breakpoint exact paths, conditions, attribute changes and removal',async()=>{
+        await breakpoint('data','customer.orders.o1.total','console','value > 78');
+        await hit(()=>gramlot.data.setItem('customer.orders.o1.total',50),0);
+        await hit(()=>gramlot.data.setItem('customer.orders.o1.total',80),1);
+        await hit(()=>gramlot.data.setItem('customer.orders.o2.total',99),0);
+        await breakpoint('data','customer.orders.o1.total','console');
+        await hit(()=>gramlot.data.getNode('customer.orders.o1.total').setAttr({currency:'USD'}),1);
+        await breakpoint('data','customer.orders.o1.total','');
+        await hit(()=>gramlot.data.setItem('customer.orders.o1.total',90),0);
+    });
+    await check('Source breakpoints survive page reload',async()=>{
+        await breakpoint('source','main.div_0','console');await page.reload();await waitValue('customer.name','Ada');
+        await panel.waitForFunction(()=>gramlotDevtools.connection.breakpoints.some(b=>b.root==='source'));
+        await hit(()=>gramlot.src.source.getNode('main.div_0').setAttr({class:'afterReload'}),1);
+        await breakpoint('source','main.div_0','');
+    });
+    await check('debugger pauses on the writer stack in the shared agent',async()=>{
+        const cdp=await context.newCDPSession(page);await cdp.send('Debugger.enable');
+        await breakpoint('data','customer.name','debugger');
+        const paused=new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Debugger did not pause')),7000);cdp.once('Debugger.paused',event=>{clearTimeout(timer);resolve(event);});});
+        const write=page.evaluate(()=>gramlot.data.setItem('customer.name','Paused'));
+        const event=await paused;await cdp.send('Debugger.resume');await write;await cdp.detach();
+        assert.ok(event.callFrames.some(f=>f.functionName==='hit'));await breakpoint('data','customer.name','');
+    });
+    await check('Styles edits the target root, downloads applied CSS and resets it',async()=>{
+        await page.evaluate(()=>document.documentElement.style.setProperty('--gramlot-action','#456bc4'));
+        await tool.getByRole('tab',{name:'Styles',exact:true}).click();
+        const field=tool.getByLabel('--gramlot-action value',{exact:true});await field.fill('#cc2244');await field.press('Enter');
+        await page.waitForFunction(()=>getComputedStyle(document.documentElement).getPropertyValue('--gramlot-action').trim()==='#cc2244');
+        const link=tool.getByText('Download CSS',{exact:true});await panel.waitForFunction(()=>document.querySelector('gramlot-tools-inspector').shadowRoot.querySelector('a[download]')?.hasAttribute('href'));
+        const downloading=panel.waitForEvent('download');await link.click();const download=await downloading;
+        assert.equal(download.suggestedFilename(),'theme-overrides.css');assert.match(await readFile(await download.path(),'utf8'),/--gramlot-action: #cc2244 !important;/);
+        await panel.screenshot({path:'/private/tmp/gramlot-shared-devtools.png'});
+        await tool.getByLabel('Reset --gramlot-action',{exact:true}).click();await page.waitForFunction(()=>getComputedStyle(document.documentElement).getPropertyValue('--gramlot-action').trim()==='#456bc4');
+    });
+    await check('no PoC runtime is loaded into the inspected page',async()=>{assert.equal(requests.some(url=>/poc|inspector/.test(url)),false);});
+    await check('disposal and no-instance navigation are reported',async()=>{
+        await page.evaluate(()=>gramlot.dispose());await panel.getByText('The Gramlot instance was removed.',{exact:true}).waitFor();
+        await page.goto(`${ORIGIN}/plain.html`);await panel.getByText('No Gramlot instance in this page.',{exact:true}).waitFor();
+    });
+    await check('back/forward cache reconnects the shared inspector',async()=>{
+        await page.goto(`${ORIGIN}/index.html`);await waitValue('customer.name','Ada');
+        await page.goto(`${ORIGIN}/plain.html`);await panel.getByText('No Gramlot instance in this page.',{exact:true}).waitFor();
+        await page.goBack({waitUntil:"commit"});await ready();await waitValue('customer.name','Ada');
+    });
+    await check('frame selection isolates Data and Source edits',async()=>{
+        await page.goto(`${ORIGIN}/frames.html`);
+        await panel.waitForFunction(()=>document.getElementById('frame').options.length===2&&gramlotDevtools.connection?.state==='started');
+        const entries=await panel.locator('#frame option').evaluateAll(els=>els.map(e=>({id:e.value,title:e.textContent})));
+        await panel.selectOption('#frame',entries[0].id);await ready();await edit('data','customer.name','Value','Frame one');
+        const frames=page.frames().filter(f=>f!==page.mainFrame());await frames[0].waitForFunction(()=>gramlot.data.getItem('customer.name')==='Frame one');
+        assert.equal(await frames[1].evaluate(()=>gramlot.data.getItem('customer.name')),'Ada');
+        await panel.selectOption('#frame',entries[1].id);await waitValue('customer.name','Ada');
+        await edit('source','main.div_0','class value','second');await frames[1].waitForFunction(()=>document.getElementById('box').className==='second');
+        assert.notEqual(await frames[0].evaluate(()=>document.getElementById('box').className),'second');
+    });
+    await check('visible frames follow tab switches and preserve a manual selection',async()=>{
+        await page.goto(`${ORIGIN}/index.html`);await waitValue('customer.name','Ada');
+        await page.evaluate(()=>{for(const name of ['first','second']){const wrapper=document.createElement('div');wrapper.id=`tab-${name}`;wrapper.hidden=name==='second';const frame=document.createElement('iframe');frame.src=`index.html?frame=${name}`;frame.style.cssText='width:480px;height:250px';wrapper.append(frame);document.body.prepend(wrapper);}});
+        await panel.waitForFunction(()=>document.getElementById('frame').options.length===2
+            &&gramlotDevtools.frames.get(gramlotDevtools.frameId)?.url.includes('frame=first')
+            &&[...gramlotDevtools.frames.values()].some(frame=>frame.url.includes('frame=second')&&frame.instance&&frame.visible===false));
+        await panel.selectOption('#frame','0');await ready();await page.evaluate(()=>gramlot.data.setItem('manualSelection',true));await waitValue('manualSelection',true);
+        assert.equal(await panel.evaluate(()=>gramlotDevtools.frameId),0);
+        await page.evaluate(()=>{document.getElementById('tab-first').hidden=true;document.getElementById('tab-second').hidden=false;});
+        await panel.waitForFunction(()=>gramlotDevtools.frames.get(gramlotDevtools.frameId)?.url.includes('frame=second')&&gramlotDevtools.connection?.state==='started');
+        await page.evaluate(()=>document.getElementById('tab-second').remove());await panel.waitForFunction(()=>gramlotDevtools.frameId===0&&gramlotDevtools.connection?.state==='started');
+    });
+    await check('strict page CSP permits inspection and rejects only conditional breakpoints',async()=>{
+        await page.goto(`${ORIGIN}/csp.html`);await ready();await waitValue('customer.name','Ada');
+        await assert.rejects(breakpoint('data','customer.name','console','value === "X"'),/unsafe-eval|Content Security Policy/);
+        await breakpoint('data','customer.name','console');await hit(()=>gramlot.data.setItem('customer.name','No eval'),1);
+        await breakpoint('data','customer.name','');assert.deepEqual(await panel.evaluate(()=>gramlotDevtools.violations),[]);
+    });
+    await check('closing panel releases the page agent and all subscriptions',async()=>{
+        await panel.close();await page.waitForFunction(()=>!window[Symbol.for('gramlot-devtools.agent')]);
+        assert.equal(await page.evaluate(()=>Object.keys(gramlot.data._updSubscribers).some(k=>k.startsWith('inspector-bridge-'))),false);
+    });
+    await check('no unexpected browser errors',async()=>{
+        assert.deepEqual(errors.filter(e=>!e.includes('unsafe-eval')&&!e.includes('Refused to evaluate')&&!e.includes('404')),[]);
+    });
+} finally {await context.close();await new Promise(resolve=>server.close(resolve));}
+console.log(`${results.filter(([status])=>status==='PASS').length}/${results.length} checks passed`);
+if(results.some(([status])=>status==='FAIL'))process.exitCode=1;

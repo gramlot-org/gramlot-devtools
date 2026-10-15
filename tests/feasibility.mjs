@@ -1,6 +1,6 @@
 // Copyright 2026 Softwell S.r.l. - SPDX-License-Identifier: Apache-2.0
 /**
- * Step 1 feasibility: PoC runtime + inspector (recipe inspector.tytx) in an
+ * Shared inspector qualification in an
  * MV3 extension page, on local Bags, under the extension CSP (no eval).
  * Run after `node build.mjs`: `node tests/feasibility.mjs`.
  */
@@ -22,34 +22,17 @@ try {
     page.on('console', msg => { if (['error', 'warning'].includes(msg.type())) console_.push(msg.text()); });
     page.on('pageerror', error => console_.push(error.message));
     await page.goto(`chrome-extension://${new URL(worker.url()).host}/feasibility.html`);
-    await page.waitForFunction(() => window.feasibility && (window.feasibility.mounted || window.feasibility.errors.length));
-    assert.deepEqual(await page.evaluate(() => window.feasibility.errors), [], console_.join('\n'));
-    const outcome = await page.evaluate(async () => {
-        const f = window.feasibility;
-        const labels = kind => [...document.querySelector(`[data-inspector="${kind}"]`).shadowRoot.querySelectorAll('summary, li')]
-            .map(el => el.firstChild?.textContent?.trim() || el.textContent.trim());
-        const tool = f.tool;
-        tool.app.live(() => tool.app.builder.data.setItem('dataPath', 'customer.name'));
-        await new Promise(r => setTimeout(r, 50));
-        const input = document.querySelector('[data-inspector="data-editor"] [data-field="rows"]').shadowRoot
-            .querySelector('[data-property="value"] [data-cell="value"]');
-        input.focus();
-        input.value = 'Grace';
-        input.dispatchEvent(new Event('input', {bubbles: true, composed: true}));
-        input.blur();
-        f.bags.data.setItem('customer.city', 'Rome');
-        await new Promise(r => setTimeout(r, 50));
-        return {mounted: f.mounted, errors: f.errors, violations: f.violations, data: labels('data'), source: labels('source'),
-            edited: f.bags.data.getItem('customer.name'), live: labels('data').includes('city')};
-    });
-    console.log(JSON.stringify(outcome));
-    assert.equal(outcome.mounted, true);
-    assert.deepEqual(outcome.errors, []);
-    assert.deepEqual(outcome.violations, []);
-    assert.deepEqual(console_, []);
-    assert.equal(outcome.edited, 'Grace');
-    assert.equal(outcome.live, true);
-    console.log('PASS  feasibility: inspector mounted, edited and updated live with no eval and no console errors');
+    await page.waitForFunction(() => window.fixture?.connection.state === 'started');
+    const tool=page.locator('gramlot-tools-inspector');
+    await tool.locator('gramlot-poc-tree[data-root=data] [data-node-path=name]').click();
+    await tool.getByLabel('Value',{exact:true}).fill('Grace');
+    await tool.getByLabel('Value',{exact:true}).press('Enter');
+    await page.waitForFunction(()=>fixture.app.data.getItem('name')==='Grace');
+    await page.evaluate(()=>fixture.app.data.setItem('city','Rome'));
+    await tool.locator('gramlot-poc-tree[data-root=data] [data-node-path=city]').waitFor();
+    assert.equal(await tool.locator('gramlot-poc-palette').count(),0);
+    assert.deepEqual(console_,[]);
+    console.log('PASS shared inspector in MV3: embedded UI, editing, live updates, no eval');
 } finally {
     await context.close();
 }

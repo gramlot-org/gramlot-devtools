@@ -26,7 +26,7 @@ Block ID: **GDT-010-010**.
 
 The **Data** and **Source** tabs show the two Bags as trees. Selecting a node opens its value and attributes in the property editor.
 
-An edit is committed when focus leaves the edited row; moving between cells of the same row does not commit. The panel sends the edit to the page as a command (`setValue`, `setAttributes`, `deleteAttribute`). The page applies it to the real Bag, and the panel copy changes only when the page reports the change back. A Source attribute change updates the page DOM through the Gramlot renderer.
+An edit is committed when focus leaves the edited row; moving between cells of the same row does not commit. Enter also saves; Escape reloads the row. The shared connection sends a revision-checked `edit` command to the page. The page applies it to the real Bag, and the panel copy changes only when the page reports the change back. A Source attribute change updates the page DOM through the Gramlot renderer.
 
 Bag values and node insertion or removal are not editable from the panel.
 
@@ -46,14 +46,14 @@ Block ID: **GDT-010-020**.
 
 Breakpoints imitate the GenroPy legacy data breakpoints and also apply to the Source.
 
-- Hover a tree row or focus its action and click the grey outlined circle on the left. The dialog asks for **Mode** (Debugger, Console, None to remove) and an optional **Condition**.
+- Hover a tree row or focus its action and click the grey outlined circle on the left. The dialog asks for **Breakpoint mode** (Debugger, Console, None to remove) and an optional **Condition**.
 - A breakpoint fires on the exact path of the changed node, for every event (`upd_value`, `upd_attrs`, `upd_value_attr`, `ins`, `del`).
 - The condition is a JavaScript expression over `evt`, `node`, `value`, `oldvalue`, `attrs_diff`, `reason`, `path`, for example `value > 78` or `evt === 'upd_attrs'`. The agent compiles it in the page. Under a page CSP without `'unsafe-eval'` the compilation is refused and the panel shows the error; breakpoints without a condition always work.
-- **Debugger** pauses the page in `breakpointHit`; the caller of `setItem` or `setAttr` is lower in the call stack. **Console** logs `** Gramlot breakpoint **` with root, path, event and reason.
-- Active breakpoints show in a line above the properties of the selected node and in the `N breakpoints` button of the status bar, which opens the list (Edit, Remove).
+- **Debugger** pauses the page in `hit`; the caller of `setItem` or `setAttr` is lower in the call stack. **Console** logs `** Gramlot breakpoint **` with root, path, event and reason.
+- The Properties breakpoint counter opens the active list, including paths deleted from the Bag.
 - The panel keeps the breakpoints and sends them again after every reconnection, so they survive reloads and frame changes.
 
-The left circle is visible on hover or keyboard focus. Active breakpoints remain visible: red without a condition, yellow with one. A refused condition has no active mark; its error remains visible in the properties and breakpoint list. Marks update without changing tree expansion, selection or focus. The toolbar and dialogs use compact controls.
+The left circle is visible on hover or keyboard focus. Active breakpoints remain visible: red without a condition, yellow with one. Invalid or blocked conditions report an error and preserve the previous breakpoint configuration. Marks update without changing tree expansion, selection or focus. The toolbar and dialogs use compact controls.
 
 <a id="gdt-010-025"></a>
 
@@ -64,3 +64,25 @@ Block ID: **GDT-010-025**.
 - Page reload, restore from the back/forward cache and a service worker restart reconnect the panel with new snapshots.
 - A page without Gramlot shows `No Gramlot instance in this page.`; a disposed instance shows `The Gramlot instance was removed.`
 - Closing DevTools unsubscribes the agent from both Bags and removes its listeners and its marker `window[Symbol.for('gramlot-devtools.agent')]`.
+
+<a id="gdt-010-030"></a>
+
+## 030 · Styles and CSS download
+
+Block ID: **GDT-010-030**.
+
+**Styles** edits existing `--gramlot-*` variables on the selected document root.
+Each row is name, value, colour picker, reset. Text saves with Enter or when focus
+leaves the field; hexadecimal RGB colours also have a native picker. Refresh
+reads external theme changes; Reset all removes the preview stylesheet.
+
+Download CSS saves applied overrides in `theme-overrides.css`, including CSS
+expressions and `!important`. Load it after the theme stylesheet. The link is
+unavailable while an operation is pending or when there are no overrides.
+These are temporary previews: changing the selected frame, reloading the page
+or closing DevTools removes them. There is no persistence endpoint or theme
+catalogue. The page must already load a Gramlot theme (or define root variables).
+
+Strings, finite numbers, safe integers, booleans, null and UTC dates/times are
+editable. Bag branches and unsupported values are read-only; `_meta` is omitted.
+Deferred resolvers are never evaluated by inspection.

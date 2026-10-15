@@ -10,7 +10,25 @@ Document ID: **GDT-025**.
 
 Block ID: **GDT-025-005**.
 
-`npm install --package-lock=false`, `node build.mjs` → `dist/`. Test page runtime from `GRAMLOT_RUNTIME` (default `../gramlot/js/dist/gramlot.js`, skipped when missing). Panel dependencies use unconstrained `@genrojs/bag` and `@genrojs/tytx` from npm, without a lockfile; refresh with `npm update --package-lock=false`.
+Node 22 or later. Dependencies are installed locally from npm.
+
+```sh
+npm install --package-lock=false
+node build.mjs
+```
+
+`dist/` is the extension. The test page copies Gramlot's `dist/gramlot.js` from `GRAMLOT_RUNTIME` (default: sibling checkout `../gramlot/js/dist/gramlot.js`); when it is missing the copy is skipped with a message. The extension depends on `@gramlot/gramlot` with a minimum version and no upper bound and no lockfile. Refresh it with `npm update --package-lock=false`.
+
+To work on the shared inspector locally, build the sibling core checkout
+and install that checkout explicitly:
+
+```sh
+npm run build --prefix ../gramlot/js
+npm install --no-save --package-lock=false ../gramlot/js
+node build.mjs
+```
+
+There is no build fallback to a vendored inspector.
 
 <a id="gdt-025-010"></a>
 
@@ -18,35 +36,46 @@ Block ID: **GDT-025-005**.
 
 Block ID: **GDT-025-010**.
 
-Unit tests: protocol and agent (node). Browser suites: feasibility, e2e, DevTools (Playwright Chromium, back/forward cache enabled). The DevTools suite uses an internal frontend path. Also check in Google Chrome: headless missed three defects.
+```sh
+npm test                            # protocol and agent, with the real Bag
+node tests/feasibility.mjs            # inspector in an extension page, no eval
+node tests/e2e.mjs                    # extension in headless Chromium, panel as a tab
+node tests/devtools.mjs               # panel inside real DevTools, over CDP
+```
 
-Verified 2026-10-15 with Bag 0.11.0 and TYTX 0.16.2: 14 unit tests,
-the extension build, feasibility check, 28 e2e checks and eight real-DevTools
-checks pass in Playwright Chromium. Coverage includes editing, frame selection,
-reloads, strict CSP, cleanup, and breakpoint marks (hover, keyboard focus,
-red/yellow state and removal without replacing tree rows). Source comparisons
-use the complete TYTX text, including subtype metadata, without JSON-only assumptions.
-The provisional SourceBag registration uses payload codecs, separate from the
-new Bag document-ingestion API. No vendored file or upstream library is modified.
-Reload the unpacked extension and reopen DevTools to activate the rebuilt bundles.
-Local standalone files still require file-URL permission; direct file-origin
-behavior and a separate Google Chrome run were not browser-qualified here.
+The browser tests need `npx playwright install chromium`. They enable the back/forward cache, which Playwright disables by default. `tests/devtools.mjs` reaches the DevTools frontend through an internal module path that can change between Chromium versions. Headless Chromium does not replace a check in Google Chrome: three defects were found only there (service worker shutdown, back/forward cache port errors and reconnection).
 
-**Historical record — 2026-10-14:** the old panel dependencies (Bag 0.5.3 and
-TYTX 0.15.1) omitted the Source subtype metadata, causing five e2e and three
-DevTools failures. The owner explicitly requested updating the panel libraries
-and fixing these eight tests. The maintained dependencies and passive subtype
-registration now resolve those failures.
+Verified 2026-10-15: the shared implementation passes five unit tests, the
+extension build, the MV3 feasibility check, all 22 routed end-to-end checks and
+all eight checks inside real Chromium DevTools. Coverage includes Data/Source
+edits, revision rejection, page and service-worker reconnection, back/forward
+cache, frame isolation/visibility, breakpoint conditions and debugger writer
+stacks, CSS preview/download/reset, CSP and teardown. The Styles panel was also
+visually inspected. There are no unexpected browser errors.
+
+The build includes LICENSE, NOTICE and the Gramlot package's runtime-notices.json
+with the bundled dependency license texts.
+Reload the unpacked extension and reopen DevTools to activate rebuilt bundles.
+Direct file-origin behavior and a separate Google Chrome run are not qualified
+by the Chromium tests.
+
+**Historical record — 2026-10-15, before unification:** the previous PoC panel
+passed 14 unit tests, 28 end-to-end checks and eight real-DevTools checks with
+Bag 0.11.0 and TYTX 0.16.2. Its provisional SourceBag payload codec preserved
+exact subtype wire metadata. That implementation and its compatibility codec
+are removed by the shared inspector migration; current tests cover the shared
+node-descriptor contract instead.
 
 <a id="gdt-025-015"></a>
 
-## 015 · Vendored PoC runtime
+## 015 · Shared inspector dependency
 
 Block ID: **GDT-025-015**.
 
-`vendor/gramlot-poc/`: unmodified PoC modules used by the panel (commit `10478b5`) with LICENSE/NOTICE; adapted copies in `src/inspector/`. Removed once Gramlot is published.
-
-The adapted `panel-tree.js` adds left-gutter row actions and an in-place mark refresh. `panel-source-bag.js` registers the provisional `XS` wire type with the current Bag payload codecs. The build routes SourceBag imports to this adapted copy. Their vendored sources remain unchanged.
+The panel and page agent are imported from the optional Gramlot package entries.
+No `vendor/gramlot-poc`, adapted inspector, passive Source subtype codec or
+independent property editor remains. Changes to shared inspector behavior belong
+in core; Chrome discovery, frame selection and routing belong in this repository.
 
 <a id="gdt-025-020"></a>
 
@@ -54,7 +83,7 @@ The adapted `panel-tree.js` adds left-gutter row actions and an in-place mark re
 
 Block ID: **GDT-025-020**.
 
-With owner authorization: tag `v<version>` = manifest version; the release workflow tests, builds and attaches a zip without `feasibility.*`.
+Releases need owner authorization. Push a tag `v<version>` equal to `version` in `src/manifest.json`. The workflow `.github/workflows/release.yml` runs the protocol and agent tests, builds `dist/`, zips it without the `feasibility.*` files and attaches `gramlot-devtools-<version>.zip` to a GitHub release.
 
 <a id="gdt-025-025"></a>
 
@@ -62,4 +91,7 @@ With owner authorization: tag `v<version>` = manifest version; the release workf
 
 Block ID: **GDT-025-025**.
 
-`develop` for new work, `main` for accepted work; `<type>: <subject>`; `git switch`; no force-push; no AI/LLM/assistant references or attribution trailers anywhere (`hooks/commit-msg`). See AGENTS.md and CONTRIBUTING.md.
+- New work on `develop`; `main` holds verified, owner-accepted work.
+- Commit messages `<type>: <subject>` in English; `git switch`, never `git checkout`; never force-push a pushed branch.
+- No AI, LLM or assistant references in commits, pull requests, code, comments or documents; no assistant `Co-Authored-By` trailers; no `Generated with …` lines. Enable the hooks with `git config core.hooksPath hooks`; `hooks/commit-msg` rejects the usual forms.
+- See `AGENTS.md` and `CONTRIBUTING.md`.

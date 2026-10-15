@@ -1,40 +1,6 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<title>Gramlot</title>
-<link rel="stylesheet" href="panel.css">
-</head>
-<body>
-<div id="status" data-state="waiting">
-  <span id="message">Connecting…</span>
-  <select id="frame" aria-label="Gramlot instance" hidden></select>
-  <button id="breakpoints" type="button" hidden></button>
-</div>
-<dialog id="breakpoint-dialog" aria-labelledby="breakpoint-title" aria-describedby="breakpoint-where">
-  <form method="dialog">
-    <p class="dialog-title" id="breakpoint-title">Set breakpoint</p>
-    <p class="dialog-target" id="breakpoint-where"></p>
-    <label>Mode
-      <select name="mode">
-        <option value="debugger">Debugger</option>
-        <option value="console">Console</option>
-        <option value="">None (remove)</option>
-      </select>
-    </label>
-    <label>Condition <input name="condition" type="text" placeholder="value > 78" autocomplete="off" aria-describedby="breakpoint-hint"></label>
-    <p class="dialog-hint" id="breakpoint-hint">Optional JavaScript expression over evt, node, value, oldvalue, attrs_diff, reason, path. Evaluated in the page.</p>
-    <menu><button value="cancel" formnovalidate>Cancel</button><button value="ok">OK</button></menu>
-  </form>
-</dialog>
-<dialog id="breakpoint-list" aria-labelledby="breakpoint-list-title">
-  <form method="dialog">
-    <p class="dialog-title" id="breakpoint-list-title">Breakpoints</p>
-    <ul id="breakpoint-items"></ul>
-    <menu><button value="close">Close</button></menu>
-  </form>
-</dialog>
-<div id="inspector" hidden></div>
-<script type="module" src="panel.js"></script>
-</body>
-</html>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Gramlot</title>
+<link rel="stylesheet" href="panel.css"></head><body>
+<div id="status" data-state="waiting"><span id="message">Connecting…</span>
+<select id="frame" aria-label="Gramlot instance" hidden></select></div>
+<gramlot-tools-inspector id="inspector" embedded hidden></gramlot-tools-inspector>
+<script type="module" src="panel.js"></script></body></html>

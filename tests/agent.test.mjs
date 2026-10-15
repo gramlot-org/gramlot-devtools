@@ -3,48 +3,58 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {runInNewContext} from 'node:vm';
 import {build} from 'esbuild';
-import {Bag} from '@genrojs/bag';
-import {message, encodeValue} from '../src/protocol.js';
-
+import {Bag} from '@gramlot/gramlot';
+import {message} from '../src/protocol.js';
 const bundle = (await build({entryPoints: [new URL('../src/agent.js', import.meta.url).pathname],
     bundle: true, write: false, format: 'iife'})).outputFiles[0].text;
-
-function agent(gramlot) {
+const until = async fn => { for(let i=0;i<100;i++){const result=fn();if(result)return result;await new Promise(r=>setTimeout(r,5));}throw new Error('No agent response'); };
+function fixture(gramlot) {
     const sent = [], listeners = new Map();
-    const window = {gramlot, postMessage: msg => sent.push(msg),
-        addEventListener: (type, fn) => listeners.set(type, fn),
-        removeEventListener: type => listeners.delete(type)};
-    runInNewContext(bundle, {window, document: {documentElement: {}, title: 'Current Gramlot'},
+    const window = {gramlot, console, Function, crypto, postMessage: msg => sent.push(msg),
+        addEventListener(type, fn) {if(!listeners.has(type))listeners.set(type,new Set());listeners.get(type).add(fn);},
+        removeEventListener(type, fn) {listeners.get(type)?.delete(fn);}};
+    const document = {documentElement: {}, defaultView: window, title: 'Current Gramlot'};
+    if(gramlot?.src)gramlot.src.renderer={destination:{ownerDocument:document}};
+    runInNewContext(bundle, {window, document, MessageChannel, queueMicrotask, Date,
         IntersectionObserver: class {observe() {} disconnect() {}}, console,
         setInterval: () => 1, clearInterval() {}});
-    const send = (type, payload = {}) => listeners.get('message')({source: window,
-        data: {...message(type, payload), dir: 'to-page', session: 'test'}});
-    send('connect', {session: 'test'});
-    return {sent, send};
+    const send = (type, payload = {}, session = 'test') => {for(const listener of listeners.get('message')||[])listener({source:window,
+        data:{...message(type,payload),dir:'to-page',session}});};
+    send('connect',{session:'test'});
+    return {sent,send,window};
 }
-
-test('current src.source is detected, subscribed and edited without a top-level alias', () => {
-    const data = new Bag(), source = new Bag();
-    data.setItem('caption', 'Data'); source.setItem('caption', 'Source');
-    const gramlot = {state: 'started', data, src: {source}};
-    Object.defineProperty(gramlot, 'source', {get() { throw new Error('Legacy access'); }});
-    const a = agent(gramlot);
-    const instanceId = a.sent.find(msg => msg.type === 'hello').payload.instances[0].instanceId;
-    for (const root of ['data', 'source']) a.send('subscribe', {instanceId, root});
-    const snapshot = a.sent.find(msg => msg.type === 'snapshot' && msg.payload.root === 'source');
-    assert.equal(snapshot.payload.tytx, source.toTytx('json'));
-    a.send('setValue', {instanceId, root: 'source', path: 'caption', ...encodeValue(Bag, 'Edited')});
-    assert.equal(source.getItem('caption'), 'Edited');
-    assert.equal(data.getItem('caption'), 'Data');
-    assert.ok(a.sent.some(msg => msg.type === 'change' && msg.payload.root === 'source'));
-    a.send('disconnect');
+test('shared agent inspects and edits the page Bag class; stale connection and session are ignored', async () => {
+    const data=new Bag(), source=new Bag(); data.setItem('caption','Data');source.setItem('caption','Source');
+    const app={state:'started',data,src:{source}};
+    Object.defineProperty(app,'source',{get(){throw new Error('Legacy access');}});
+    const f=fixture(app);
+    try {
+        const instanceId=f.sent.find(m=>m.type==='hello').payload.instances[0].instanceId;
+        f.send('inspect',{instanceId,connectionId:'first'});
+        const initial=await until(()=>f.sent.find(m=>m.payload.data?.snapshot));
+        const row=initial.payload.data.snapshot.source[0];
+        assert.equal(Bag.fromTytx(row.value.encoded,'json').getItem('value'),'Source');
+        const wrapper=new Bag();wrapper.setItem('value','Edited');
+        const edit={type:'edit',id:1,command:{root:'source',path:'caption',nodeId:row.id,revision:row.revision,remove:[],set:[],value:wrapper.toTytx('json')}};
+        f.send('inspector',{connectionId:'wrong',data:edit});
+        f.send('inspector',{connectionId:'first',data:edit},'wrong-session');
+        assert.equal(source.getItem('caption'),'Source');
+        f.send('inspector',{connectionId:'first',data:edit});
+        await until(()=>f.sent.find(m=>m.payload.data?.id===1));
+        assert.equal(source.getItem('caption'),'Edited');assert.equal(data.getItem('caption'),'Data');
+        f.send('inspector',{connectionId:'first',data:{...edit,id:2}});
+        const stale=await until(()=>f.sent.find(m=>m.payload.data?.id===2));
+        assert.equal(stale.payload.data.ok,false);
+        f.send('uninspect',{connectionId:'first'});
+        assert.equal(Object.keys(data._updSubscribers).length,0);
+    } finally {f.send('disconnect');}
+    assert.equal(f.window[Symbol.for('gramlot-devtools.agent')],undefined);
 });
-
-test('a legacy-only or disposed instance is not accepted as the current API', () => {
-    for (const gramlot of [undefined, {data: new Bag(), source: new Bag()},
-        {state: 'disposed', data: new Bag(), src: {source: new Bag()}}]) {
-        const a = agent(gramlot);
-        assert.equal(a.sent.find(msg => msg.type === 'hello').payload.instances.length, 0);
-        a.send('disconnect');
+test('discovery excludes absent, legacy-only and disposed instances', () => {
+    for(const app of [undefined,{data:new Bag(),source:new Bag()},{state:'disposed',data:new Bag(),src:{source:new Bag()}}]) {
+        const f=fixture(app);assert.equal(f.sent.find(m=>m.type==='hello').payload.instances.length,0);f.send('disconnect');
     }
+});
+test('the injected agent bundles no application runtime or duplicate Bag class', () => {
+    assert.doesNotMatch(bundle,/class Gramlot|class Bag[ {]|class GramlotBuilder|customElements/);
 });

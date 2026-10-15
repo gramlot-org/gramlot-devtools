@@ -12,32 +12,14 @@ import {cpSync, mkdirSync, rmSync, existsSync} from 'node:fs';
 import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {build} from 'esbuild';
-import {createRequire} from 'node:module';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const POC = join(HERE, 'vendor/gramlot-poc');
-const require = createRequire(import.meta.url);
 const GRAMLOT_RUNTIME = process.env.GRAMLOT_RUNTIME || resolve(HERE, '../gramlot/js/dist/gramlot.js');
 const DIST = join(HERE, 'dist');
 rmSync(DIST, {recursive: true, force: true});
 mkdirSync(DIST, {recursive: true});
 
-// The vendored PoC runtime imports bare `gramlot-dom`, `genro-bag-js`,
-// `genro-tytx` and `/_assets/dom/...`. Resolve its historical import names to
-// the maintained packages; the vendored runtime itself stays unchanged.
-const resolver = {name: 'gramlot-devtools', setup(b) {
-    b.onResolve({filter: /(^|\/)source-bag\.js$/}, () => ({path: join(HERE, 'src/inspector/panel-source-bag.js')}));
-    b.onResolve({filter: /^\/_assets\/dom\//}, a => ({path: join(POC, 'js/dom/src', a.path.slice(13))}));
-    b.onResolve({filter: /^gramlot-dom$/}, () => ({path: join(POC, 'js/dom/src/index.js')}));
-    b.onResolve({filter: /^genro-bag-js$/}, () => ({path: require.resolve('@genrojs/bag')}));
-    b.onResolve({filter: /^genro-tytx$/}, () => ({path: require.resolve('@genrojs/tytx')}));
-}};
-
-const common = {
-    bundle: true, minify: false, sourcemap: false, logLevel: 'warning', target: 'chrome120',
-    plugins: [resolver], loader: {'.tytx': 'text'},
-    legalComments: 'none',
-};
+const common = {bundle: true, minify: false, sourcemap: false, logLevel: 'warning', target: 'chrome120', legalComments: 'none'};
 const entries = [
     {in: 'src/panel.js', format: 'esm'},
     {in: 'src/feasibility.js', format: 'esm'},
@@ -50,12 +32,13 @@ for (const entry of entries) {
     await build({...common, entryPoints: [join(HERE, entry.in)], format: entry.format,
         outfile: join(DIST, entry.in.slice(4))});
 }
-for (const file of ['manifest.json', 'devtools.html', 'panel.html', 'panel.css', 'panel-tabs.css', 'feasibility.html']) {
+for (const file of ['manifest.json', 'devtools.html', 'panel.html', 'panel.css', 'feasibility.html']) {
     if (existsSync(join(HERE, 'src', file))) cpSync(join(HERE, 'src', file), join(DIST, file));
 }
-// Unchanged PoC stylesheet, loaded by the inspector through import.meta.url.
-cpSync(join(POC, 'js/pages/src/inspector.css'), join(DIST, 'inspector.css'));
-
+// Preserve the package's bundled notices alongside the extension's own license.
+for (const name of ['LICENSE', 'NOTICE']) cpSync(join(HERE, name), join(DIST, name));
+cpSync(join(dirname(fileURLToPath(import.meta.resolve('@gramlot/gramlot/runtime'))), 'runtime-notices.json'),
+    join(DIST, 'runtime-notices.json'));
 // Test page: the Gramlot runtime is copied, never built or modified in place.
 if (existsSync(GRAMLOT_RUNTIME)) {
     mkdirSync(join(HERE, 'test-page/vendor'), {recursive: true});

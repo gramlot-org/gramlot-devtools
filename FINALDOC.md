@@ -1,6 +1,6 @@
 # FINALDOC — Gramlot DevTools for Chrome
 
-> Delivery record of the work done in gramlot-poc (`tools/gramlot-devtools-chrome/`,
+> Historical record — 2026-09-25. Delivery record of the work done in gramlot-poc (`tools/gramlot-devtools-chrome/`,
 > branch `inspector-provvisorio`). On 2026-09-26 the tool moved, with
 > its history, to its own repository `gramlot-org/gramlot-devtools`. Paths and
 > commit hashes below refer to the gramlot-poc worktree.

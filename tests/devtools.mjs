@@ -82,7 +82,7 @@ async function session(url, onEvent = () => {}) {
 const results = [];
 const check = async (name, fn) => {
     try { await fn(); results.push(['PASS', name]); }
-    catch (error) { results.push(['FAIL', name, error.message.split('\n')[0]]); }
+    catch (error) { results.push(['FAIL', name, error.stack || error.message]); }
 };
 const errors = [];
 
@@ -126,13 +126,14 @@ try {
     });
     await panel.send('Runtime.enable');
     await panel.send('Log.enable');
-    const snapshotsDone = `globalThis.gramlotDevtools?.instanceId && gramlotDevtools.log.filter(t => t === 'snapshot').length >= 2`;
+    const snapshotsDone = `globalThis.gramlotDevtools?.instanceId && gramlotDevtools.connection?.state === 'started'`;
+    const tree = `(bag) => bag.getNodes().map(node => ({label:node.label,
+        value:node.getValue(true)?.getNodes ? tree(node.getValue(true)) : node.getValue(true),
+        attrs:Object.fromEntries(Object.entries(node.getAttr()).filter(([key]) => key !== '_meta'))}))`;
     const same = async () => {
-        const pageWire = await page.evaluate(() => ({data: gramlot.data.toTytx('json'), source: gramlot.src.source.toTytx('json')}));
-        const copyWire = await panel.evaluate(`({data: gramlotDevtools.tool.scopes.data.bag.toTytx('json'),
-            source: gramlotDevtools.tool.scopes.source.bag.toTytx('json')})`);
-        assert.equal(copyWire.data, pageWire.data);
-        assert.equal(copyWire.source, pageWire.source);
+        const pageTree = await page.evaluate(`(() => {const tree = ${tree};return JSON.stringify({data:tree(gramlot.data),source:tree(gramlot.src.source)});})()`);
+        const copyTree = await panel.evaluate(`(() => {const tree = ${tree};return JSON.stringify({data:tree(gramlotDevtools.connection.data),source:tree(gramlotDevtools.connection.source)});})()`);
+        assert.deepEqual(copyTree, pageTree);
     };
     await check('criterion 2: in DevTools the copies equal the page Bags', async () => {
         await panel.until(snapshotsDone);
@@ -140,14 +141,14 @@ try {
     });
     await check('criterion 3: page console write appears in the DevTools panel', async () => {
         await page.evaluate(() => gramlot.data.setItem('a.b', 1));
-        await panel.until(`gramlotDevtools.tool.scopes.data.bag.getItem('a.b') === 1`, 3000);
+        await panel.until(`gramlotDevtools.connection.data.getItem('a.b') === 1`, 3000);
     });
     await check('criterion 6: page reload reconnects the DevTools panel', async () => {
         const hellos = await panel.evaluate(`gramlotDevtools.log.filter(t => t === 'hello').length`);
         await page.reload();
         await page.waitForFunction(() => window.gramlot?.state === 'started');
         await panel.until(`gramlotDevtools.log.filter(t => t === 'hello').length > ${hellos} && (${snapshotsDone})
-            && gramlotDevtools.tool.scopes.data.bag.getItem('a') === null`);
+            && gramlotDevtools.connection.data.getItem('a') === null`);
         await same();
     });
     await check('strict page CSP: the DevTools panel connects and the copies equal the page', async () => {
@@ -167,7 +168,7 @@ try {
         await panel.until(`gramlotDevtools.frames.get(gramlotDevtools.frameId)?.url.includes('frame=second') && (${snapshotsDone})`);
         const second = page.frames().find(f => f.url().includes('frame=second'));
         const pageWire = await second.evaluate(() => gramlot.data.toTytx('json'));
-        assert.equal(await panel.evaluate(`gramlotDevtools.tool.scopes.data.bag.toTytx('json')`), pageWire);
+        assert.equal(await panel.evaluate(`gramlotDevtools.connection.data.toTytx('json')`), pageWire);
     });
     await check('criterion 8: no console errors in page or panel', async () => {
         assert.deepEqual(errors, []);
@@ -184,7 +185,7 @@ try {
         browser.close();
         await page.waitForFunction(() => !window[Symbol.for('gramlot-devtools.agent')], null, {timeout: 5000});
         const left = await page.evaluate(() => [gramlot.data, gramlot.src.source].flatMap(bag =>
-            [bag._updSubscribers, bag._insSubscribers, bag._delSubscribers].flatMap(Object.keys)).filter(id => id === 'gramlot-devtools'));
+            [bag._updSubscribers, bag._insSubscribers, bag._delSubscribers].flatMap(Object.keys)).filter(id => id.startsWith('inspector-bridge-')));
         assert.deepEqual(left, []);
     });
     frontend.close();
