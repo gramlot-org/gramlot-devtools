@@ -212,6 +212,56 @@ try {
         await new Promise(resolve => setTimeout(resolve, 150));
         assert.equal(logs.length - before, expected, logs.slice(before).join(' | '));
     };
+    await check('breakpoint marks: left gutter, hover, focus, red/yellow and removal without rebuilding rows', async () => {
+        await selectTab('data');
+        const action = panel.locator('[data-inspector="data"] [data-action="breakpoint"][data-path="customer"]');
+        const appearance = () => action.evaluate(button => {
+            const row = button.closest('summary, .leaf');
+            const circle = getComputedStyle(button, '::before');
+            return {
+                opacity: getComputedStyle(button.parentElement).opacity,
+                color: getComputedStyle(button).color,
+                fill: circle.backgroundColor,
+                pressed: button.getAttribute('aria-pressed'),
+                left: button.getBoundingClientRect().right <= row.querySelector('.caption').getBoundingClientRect().left,
+                captionX: row.querySelector('.caption').getBoundingClientRect().left,
+            };
+        });
+        await panel.mouse.move(0, 0);
+        await action.evaluate(button => button.blur());
+        const idle = await appearance();
+        assert.equal(idle.opacity, '0');
+        assert.equal(idle.pressed, 'false');
+        assert.equal(idle.left, true);
+        await action.evaluate(button => button.closest('summary, .leaf').setAttribute('data-mark-test', 'preserved'));
+        await panel.locator('[data-mark-test]').hover();
+        assert.equal((await appearance()).opacity, '1');
+        assert.equal((await appearance()).color, 'rgb(128, 134, 139)');
+        assert.equal((await appearance()).fill, 'rgba(0, 0, 0, 0)');
+        await panel.keyboard.press('Tab');
+        await action.focus();
+        await panel.mouse.move(0, 0);
+        assert.equal((await appearance()).opacity, '1');
+        await panel.evaluate(() => window.gramlotDevtools.setBreakpoint('data', 'customer', 'console'));
+        assert.equal(await action.evaluate(button => button === button.getRootNode().activeElement), true);
+        await action.evaluate(button => button.blur());
+        const red = await appearance();
+        assert.equal(red.opacity, '1');
+        assert.equal(red.pressed, 'true');
+        assert.equal(red.color, 'rgb(179, 38, 30)');
+        assert.equal(red.fill, red.color);
+        assert.equal(red.captionX, idle.captionX);
+        await panel.evaluate(() => window.gramlotDevtools.setBreakpoint('data', 'customer', 'console', 'value !== null'));
+        const yellow = await appearance();
+        assert.equal(yellow.opacity, '1');
+        assert.equal(yellow.color, 'rgb(249, 171, 0)');
+        assert.equal(yellow.fill, yellow.color);
+        assert.equal(await panel.locator('[data-mark-test="preserved"]').count(), 1);
+        await panel.screenshot({path: '/tmp/gramlot-devtools-breakpoints.png'});
+        await panel.evaluate(() => window.gramlotDevtools.setBreakpoint('data', 'customer', ''));
+        assert.equal((await appearance()).opacity, '0');
+        assert.equal((await appearance()).pressed, 'false');
+    });
     await check('breakpoint from the row action and dialog: console mode logs a Data change', async () => {
         await selectTab('data');
         await panel.evaluate(() => {
@@ -373,9 +423,8 @@ try {
         await panel.waitForFunction(() => panelScopes.data.bag.getItem('customer.name') === 'second'
             && document.getElementById('frame').options.length === 2
             && ![...document.getElementById('frame').options].some(o => o.title.includes('frame=first')));
-        const secondRows = await frameOf('second').evaluate(() => JSON.parse(gramlot.src.source.toTytx('json')).rows);
-        await panel.waitForFunction(rows => JSON.stringify(JSON.parse(panelScopes.source.bag.toTytx('json')).rows)
-            === JSON.stringify(rows), secondRows);
+        const secondSource = await frameOf('second').evaluate(() => gramlot.src.source.toTytx('json'));
+        await panel.waitForFunction(wire => panelScopes.source.bag.toTytx('json') === wire, secondSource);
         await page.evaluate(() => {
             document.getElementById('tab-second').hidden = true;
             document.getElementById('tab-first').hidden = false;
@@ -400,6 +449,7 @@ try {
         const error = await panel.evaluate(() => window.gramlotDevtools.breakpoints.get('data:customer.name').error);
         assert.match(error, /EvalError/);
         assert.equal(await panel.evaluate(() => document.getElementById('breakpoints').dataset.error), 'true');
+        assert.equal(await panel.locator('[data-inspector="data"] [data-action="breakpoint"][data-path="customer.name"]').getAttribute('aria-pressed'), 'false');
         // The CSP report of this refused compilation is an expected console error.
         for (let index; (index = errors.findIndex(line => line.includes('unsafe-eval'))) >= 0;) errors.splice(index, 1);
         await panel.evaluate(() => window.gramlotDevtools.setBreakpoint('data', 'customer.name', 'console'));

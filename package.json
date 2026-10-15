@@ -1,6 +1,6 @@
 {
   "name": "gramlot-devtools",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Chrome DevTools extension to inspect and edit the Data and Source Bags of a Gramlot page",
   "private": true,
   "type": "module",

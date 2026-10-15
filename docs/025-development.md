@@ -34,14 +34,17 @@ node tests/devtools.mjs               # panel inside real DevTools, over CDP
 
 The browser tests need `npx playwright install chromium`. They enable the back/forward cache, which Playwright disables by default. `tests/devtools.mjs` reaches the DevTools frontend through an internal module path that can change between Chromium versions. Headless Chromium does not replace a check in Google Chrome: three defects were found only there (service worker shutdown, back/forward cache port errors and reconnection).
 
-Verified 2026-10-14: the agent uses `gramlot.src.source` and the fixture uses
-`app.src.startSource`. With Bag 0.10.3 and TYTX 0.16.2, all 14 unit tests,
-the extension build, feasibility check, 27 e2e checks and eight real-DevTools
-checks pass. Exact Source TYTX comparisons retain `__cls: "GramlotBuilderBag"`;
-no comparison was weakened or skipped. Coverage includes live edits, reloads,
-frame selection, strict CSP and cleanup. Reload the unpacked extension and reopen
-DevTools to activate the rebuilt bundles. Local standalone files still require
-file-URL permission; direct file-origin behavior was not browser-qualified.
+Verified 2026-10-15 with Bag 0.11.0 and TYTX 0.16.2: 14 unit tests,
+the extension build, feasibility check, 28 e2e checks and eight real-DevTools
+checks pass in Playwright Chromium. Coverage includes editing, frame selection,
+reloads, strict CSP, cleanup, and breakpoint marks (hover, keyboard focus,
+red/yellow state and removal without replacing tree rows). Source comparisons
+use the complete TYTX text, including subtype metadata, without JSON-only assumptions.
+The provisional SourceBag registration uses payload codecs, separate from the
+new Bag document-ingestion API. No vendored file or upstream library is modified.
+Reload the unpacked extension and reopen DevTools to activate the rebuilt bundles.
+Local standalone files still require file-URL permission; direct file-origin
+behavior and a separate Google Chrome run were not browser-qualified here.
 
 **Historical record — 2026-10-14:** the old panel dependencies (Bag 0.5.3 and
 TYTX 0.15.1) omitted the Source subtype metadata, causing five e2e and three
@@ -55,7 +58,9 @@ registration now resolve those failures.
 
 Block ID: **GDT-025-015**.
 
-`vendor/gramlot-poc/` holds an unmodified copy of the PoC modules reached by the panel bundle, `inspector.css`, and the PoC `LICENSE` and `NOTICE`, from gramlot-poc commit `10478b5`. Adapted copies (inspector, editor, builder) live in `src/inspector/`. The folder is removed when the panel moves to the published Gramlot package.
+`vendor/gramlot-poc/` holds an unmodified copy of the PoC modules reached by the panel bundle, `inspector.css`, and the PoC `LICENSE` and `NOTICE`, from gramlot-poc commit `10478b5`. Adapted copies (inspector, editor, builder, tree, SourceBag) live in `src/inspector/`. The folder is removed when the panel moves to the published Gramlot package.
+
+The adapted `panel-tree.js` adds left-gutter row actions and an in-place mark refresh. `panel-source-bag.js` registers the provisional `XS` wire type with the current Bag payload codecs. The build routes SourceBag imports to this adapted copy. Their vendored sources remain unchanged.
 
 <a id="gdt-025-020"></a>
 

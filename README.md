@@ -1,6 +1,6 @@
 # Gramlot DevTools for Chrome
 
-Current version: **0.1.1**.
+Current version: **0.1.2**.
 
 A Chrome extension (Manifest V3, loaded unpacked) that adds a **Gramlot**
 panel to Chrome DevTools. The panel shows and edits the **Data Bag** and the
@@ -230,7 +230,7 @@ An imitation of the GenroPy legacy data breakpoints (`genro_dev.js`
 `handleDebugPath`, `genro.js` `setDebugPath` and `dataTrigger`), extended to
 the Source.
 
-- Setting: hover a tree row, click `●` (row action of the PoC tree). The
+- Setting: hover a tree row or focus its action and click the grey outlined circle on the left. The
   dialog asks for **Mode** (Debugger, Console, None to remove) and an
   optional **Condition**. A double click is not used: on a branch it opens
   and closes the `<details>` row.
@@ -252,8 +252,9 @@ the Source.
   restores and frame changes.
 - Where they show: the editor line above the properties of the selected
   node, and the `N breakpoints` button in the status bar, which opens the
-  list (Edit, Remove). The tree rows carry no mark: the PoC tree has no API
-  for per-row marks.
+  list (Edit, Remove). A solid red circle marks an active unconditional breakpoint; yellow marks
+  a conditional one. Active circles stay visible. Failed conditions have no
+  active mark; the error remains in the editor line and breakpoint list.
 
 ## Tests
 

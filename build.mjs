@@ -26,6 +26,7 @@ mkdirSync(DIST, {recursive: true});
 // `genro-tytx` and `/_assets/dom/...`. Resolve its historical import names to
 // the maintained packages; the vendored runtime itself stays unchanged.
 const resolver = {name: 'gramlot-devtools', setup(b) {
+    b.onResolve({filter: /(^|\/)source-bag\.js$/}, () => ({path: join(HERE, 'src/inspector/panel-source-bag.js')}));
     b.onResolve({filter: /^\/_assets\/dom\//}, a => ({path: join(POC, 'js/dom/src', a.path.slice(13))}));
     b.onResolve({filter: /^gramlot-dom$/}, () => ({path: join(POC, 'js/dom/src/index.js')}));
     b.onResolve({filter: /^genro-bag-js$/}, () => ({path: require.resolve('@genrojs/bag')}));

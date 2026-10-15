@@ -34,7 +34,9 @@ Each frame has one agent and at most one Gramlot instance. The selector lists th
 
 Block ID: **GDT-010-020**.
 
-Legacy-style breakpoints, Data and Source: row `●` → Mode (Debugger/Console/None) and optional JS condition over `evt, node, value, oldvalue, attrs_diff, reason, path`. Exact path, every event. Conditions compile in the page (refused under a strict CSP; unconditioned breakpoints always work). Debugger pauses in `breakpointHit`; Console logs `** Gramlot breakpoint **`. Shown in the editor line and the status-bar list; resent after every reconnection.
+Legacy-style breakpoints, Data and Source: left row circle → Mode (Debugger/Console/None) and optional JS condition over `evt, node, value, oldvalue, attrs_diff, reason, path`. Exact path, every event. Conditions compile in the page (refused under a strict CSP; unconditioned breakpoints always work). Debugger pauses in `breakpointHit`; Console logs `** Gramlot breakpoint **`. Shown in the editor line and the status-bar list; resent after every reconnection.
+
+The left circle is visible on hover or keyboard focus. Active breakpoints remain visible: red without a condition, yellow with one. A refused condition has no active mark; its error remains visible in the properties and breakpoint list. Marks update without changing tree expansion, selection or focus. The toolbar and dialogs use compact controls.
 
 <a id="gdt-010-025"></a>
 

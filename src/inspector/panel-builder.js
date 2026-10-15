@@ -5,7 +5,7 @@
 // the panel is itself the inspector.
 import {HtmlBuilder} from 'gramlot-dom';
 import '/_assets/dom/collections/layout.js';
-import '/_assets/dom/collections/storetree.js';
+import './panel-tree.js';
 import '/_assets/dom/collections/palette.js';
 
 export class PanelBuilder extends HtmlBuilder {

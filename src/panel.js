@@ -333,7 +333,15 @@ for (const kind of ROOTS) {
     scope.editor.rows.before(line);
     breakpointLines[kind] = line;
     tool.app.builder.data.subscribe(`breakpoint-line-${kind}`, {any: () => renderBreakpointLine(kind)});
-    scope.tree.rowActions = [{id: 'breakpoint', icon: '●', label: 'Breakpoint'}];
+    scope.tree.rowActions = [{id: 'breakpoint', label: 'Breakpoint', state: path => {
+        const breakpoint = state.breakpoints.get(`${kind}:${path}`);
+        return {
+            active: Boolean(breakpoint && !breakpoint.error),
+            conditional: Boolean(breakpoint?.condition),
+            label: breakpoint ? `Breakpoint: ${describeBreakpoint(breakpoint)}`
+                + (breakpoint.error ? ` · ${breakpoint.error}` : '') : 'Set breakpoint',
+        };
+    }}];
     scope.tree.addEventListener('tree-action', (event) => {
         if (event.detail.action === 'breakpoint') openBreakpointDialog(kind, event.detail.path);
     });
@@ -355,7 +363,10 @@ function renderBreakpoints() {
     breakpointsButton.textContent = `${count} breakpoint${count === 1 ? '' : 's'}`;
     breakpointsButton.dataset.error = String(failed);
     renderStatusBar();
-    for (const kind of ROOTS) renderBreakpointLine(kind);
+    for (const kind of ROOTS) {
+        renderBreakpointLine(kind);
+        tool.scopes[kind].tree.refreshRowActions();
+    }
     if (breakpointList.open) renderBreakpointList();
 }
 

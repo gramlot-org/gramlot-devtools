@@ -1,23 +1,97 @@
 /* Copyright 2026 Softwell S.r.l. - SPDX-License-Identifier: Apache-2.0 */
-:root { color-scheme: light dark; font: 12px system-ui, sans-serif; }
+:root {
+  color-scheme: light dark;
+  font: 12px/1.5 system-ui, sans-serif;
+  --panel-surface: light-dark(#fff, #202124);
+  --panel-toolbar: light-dark(#edf2fa, #292a2d);
+  --panel-text: light-dark(#303134, #e3e3e3);
+  --panel-muted: light-dark(#5f6368, #9aa0a6);
+  --panel-border: light-dark(#dadce0, #454746);
+  --panel-hover: light-dark(#e1e5ed, #35383d);
+  --panel-accent: light-dark(#0b57d0, #a8c7fa);
+  --panel-on-accent: light-dark(#fff, #062e6f);
+  --panel-error: light-dark(#b3261e, #f2b8b5);
+}
 html, body { margin: 0; height: 100%; }
-body { display: flex; flex-direction: column; background: Canvas; color: CanvasText; }
-#status { padding: 4px 8px; border-bottom: 1px solid color-mix(in srgb, CanvasText 15%, transparent); display: flex; gap: 12px; align-items: center; }
-#status[data-state="none"] #message { font-weight: 600; }
+body { display: flex; flex-direction: column; background: var(--panel-surface); color: var(--panel-text); }
+#status {
+  min-height: 28px;
+  box-sizing: border-box;
+  padding: 2px 6px;
+  border-bottom: 1px solid var(--panel-border);
+  background: var(--panel-toolbar);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+#status[data-state="none"] #message { font-weight: 500; }
+#message { min-width: 0; overflow-wrap: anywhere; }
 #message[hidden], #status[hidden], #breakpoints[hidden] { display: none; }
-#breakpoints { margin-left: auto; font: inherit; padding: 1px 8px; }
-#breakpoints[data-error="true"] { color: #c62828; }
-dialog { font: inherit; min-width: 28em; border: 1px solid color-mix(in srgb, CanvasText 25%, transparent); border-radius: 6px; }
-dialog label { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
-dialog input[type="text"] { flex: 1; font: inherit; }
-dialog menu { display: flex; justify-content: flex-end; gap: 6px; padding: 0; margin: 10px 0 0; }
-.dialog-title { font-weight: 600; margin: 0 0 8px; }
-.dialog-hint { color: GrayText; margin: 4px 0; }
-#breakpoint-items { list-style: none; padding: 0; margin: 0; }
-#breakpoint-items li { display: flex; gap: 8px; align-items: center; padding: 3px 0; }
-#breakpoint-items .where { font-family: ui-monospace, monospace; }
-#breakpoint-items .error { color: #c62828; }
+#status select, #status button, dialog select, dialog input, dialog button {
+  box-sizing: border-box;
+  min-height: 26px;
+  margin: 0;
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  background: var(--panel-surface);
+  color: var(--panel-text);
+  font: inherit;
+}
+#status select, dialog select {
+  appearance: none;
+  padding: 3px 28px 3px 8px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='m3 4.5 3 3 3-3' fill='none' stroke='%235f6368' stroke-width='1.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+}
+#frame { min-width: 0; max-width: 100%; text-overflow: ellipsis; }
+#status #frame { min-height: 24px; border-color: transparent; background-color: transparent; }
+#status #frame:hover, #status button:hover, dialog button:hover { background-color: var(--panel-hover); }
+#status #breakpoints { margin-left: auto; flex-shrink: 0; }
+#breakpoints[data-error="true"], #breakpoint-items .error { color: var(--panel-error); }
+#status button, dialog button { padding: 3px 12px; cursor: pointer; font-weight: 500; }
+#status :focus-visible, dialog :focus-visible { outline: 2px solid var(--panel-accent); outline-offset: 1px; }
+#status option, dialog option { background: var(--panel-surface); color: var(--panel-text); }
+dialog {
+  box-sizing: border-box;
+  width: 420px;
+  max-width: calc(100% - 24px);
+  max-height: calc(100% - 24px);
+  padding: 16px;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: var(--panel-surface);
+  color: var(--panel-text);
+  font: inherit;
+  box-shadow: 0 8px 28px #0003;
+}
+dialog::backdrop { background: #0003; }
+dialog form { min-width: 0; }
+.dialog-title { font-size: 13px; font-weight: 600; margin: 0 0 4px; }
+.dialog-target { margin: 0 0 16px; color: var(--panel-muted); font: 11px/1.5 ui-monospace, monospace; overflow-wrap: anywhere; }
+dialog label { display: grid; gap: 5px; margin: 12px 0; font-weight: 500; }
+dialog select, dialog input[type="text"] { width: 100%; min-width: 0; font-weight: 400; }
+dialog input[type="text"] { padding: 5px 8px; font-family: ui-monospace, monospace; }
+dialog input::placeholder { color: var(--panel-muted); opacity: 1; }
+.dialog-hint { color: var(--panel-muted); font-size: 11px; margin: -5px 0 0; overflow-wrap: anywhere; }
+dialog menu { display: flex; justify-content: flex-end; gap: 8px; padding: 0; margin: 20px 0 0; }
+dialog button[value="ok"] { background: var(--panel-accent); border-color: var(--panel-accent); color: var(--panel-on-accent); }
+dialog button[value="ok"]:hover { filter: brightness(.93); }
+#breakpoint-items { list-style: none; padding: 0; margin: 12px 0 0; }
+#breakpoint-items li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--panel-border); }
+#breakpoint-items .where { flex-basis: 100%; font: 11px/1.5 ui-monospace, monospace; overflow-wrap: anywhere; }
+#breakpoint-items li > span { min-width: 0; overflow-wrap: anywhere; }
+#breakpoint-items .error { flex-basis: 100%; }
 #breakpoint-items li > button:first-of-type { margin-left: auto; }
+@media (prefers-color-scheme: dark) {
+  #status select, dialog select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='m3 4.5 3 3 3-3' fill='none' stroke='%239aa0a6' stroke-width='1.5'/%3E%3C/svg%3E");
+  }
+}
+@media (forced-colors: active) {
+  #status select, dialog select { appearance: auto; background-image: none; padding-right: 8px; }
+  #status #frame { border-color: ButtonBorder; }
+}
 #inspector { flex: 1; position: relative; min-height: 0; }
 #inspector[hidden] { display: none; }
 .gramlot-devtools-inspector { height: 100%; }

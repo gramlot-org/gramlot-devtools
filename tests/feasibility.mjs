@@ -23,6 +23,7 @@ try {
     page.on('pageerror', error => console_.push(error.message));
     await page.goto(`chrome-extension://${new URL(worker.url()).host}/feasibility.html`);
     await page.waitForFunction(() => window.feasibility && (window.feasibility.mounted || window.feasibility.errors.length));
+    assert.deepEqual(await page.evaluate(() => window.feasibility.errors), [], console_.join('\n'));
     const outcome = await page.evaluate(async () => {
         const f = window.feasibility;
         const labels = kind => [...document.querySelector(`[data-inspector="${kind}"]`).shadowRoot.querySelectorAll('summary, li')]
