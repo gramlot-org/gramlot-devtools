@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Gramlot DevTools",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Development tool: inspect and edit the Data and Source Bags of a Gramlot page.",
   "minimum_chrome_version": "120",
   "devtools_page": "devtools.html",

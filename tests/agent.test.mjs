@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {runInNewContext} from 'node:vm';
 import {build} from 'esbuild';
-import {Bag} from '@gramlot/gramlot';
+import {Bag, GramlotBuilder} from '@gramlot/gramlot';
 import {message} from '../src/protocol.js';
 const bundle = (await build({entryPoints: [new URL('../src/agent.js', import.meta.url).pathname],
     bundle: true, write: false, format: 'iife'})).outputFiles[0].text;
@@ -24,7 +24,10 @@ function fixture(gramlot) {
     return {sent,send,window};
 }
 test('shared agent inspects and edits the page Bag class; stale connection and session are ignored', async () => {
-    const data=new Bag(), source=new Bag(); data.setItem('caption','Data');source.setItem('caption','Source');
+    const data = new Bag(), builder = new GramlotBuilder();
+    data.setItem('caption', 'Data');
+    builder.root.p('Source', {node_label: 'caption'});
+    const source = builder.source;
     const app={state:'started',data,src:{source}};
     Object.defineProperty(app,'source',{get(){throw new Error('Legacy access');}});
     const f=fixture(app);
@@ -45,6 +48,22 @@ test('shared agent inspects and edits the page Bag class; stale connection and s
         f.send('inspector',{connectionId:'first',data:{...edit,id:2}});
         const stale=await until(()=>f.sent.find(m=>m.payload.data?.id===2));
         assert.equal(stale.payload.data.ok,false);
+        const edited = f.sent.find(m => m.payload.data?.id === 1).payload.data.snapshot.source[0];
+        f.send('inspector', {connectionId: 'first', data: {type: 'insert', id: 3, command: {
+            path: 'caption', nodeId: edited.id, revision: edited.revision, tag: 'span', attrs: {title: 'Inserted'},
+        }}});
+        const inserted = await until(() => f.sent.find(m => m.payload.data?.id === 3));
+        assert.equal(inserted.payload.data.ok, true);
+        const childPath = inserted.payload.data.selection;
+        assert.equal(source.getNode(childPath).getAttr('title'), 'Inserted');
+        f.send('inspector', {connectionId: 'first', data: {type: 'undo', id: 4, command: {}}});
+        const undone = await until(() => f.sent.find(m => m.payload.data?.id === 4));
+        assert.equal(undone.payload.data.ok, true);
+        assert.equal(source.getItem('caption'), 'Edited');
+        f.send('inspector', {connectionId: 'first', data: {type: 'redo', id: 5, command: {}}});
+        const redone = await until(() => f.sent.find(m => m.payload.data?.id === 5));
+        assert.equal(redone.payload.data.ok, true);
+        assert.equal(source.getNode(childPath).getAttr('title'), 'Inserted');
         f.send('uninspect',{connectionId:'first'});
         assert.equal(Object.keys(data._updSubscribers).length,0);
     } finally {f.send('disconnect');}

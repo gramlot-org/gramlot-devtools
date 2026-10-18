@@ -1,6 +1,6 @@
 # Gramlot DevTools for Chrome
 
-Current version: **0.1.3**.
+Current version: **0.1.4**.
 
 A Chrome Manifest V3 extension that adds a **Gramlot** panel to DevTools.
 The extension imports the same inspector used inside Gramlot pages: **Data**,
@@ -70,7 +70,7 @@ No theme catalogue or persistence endpoint is included.
 Copies use the shared descriptor contract: supported scalar types and attributes,
 ordered branches and revision checks. `_meta` is omitted; unsupported values are
 read-only and resolvers are not evaluated. Source copies are not exact TYTX
-subtype round trips. Node insertion/deletion and Bag values are not editable.
+subtype round trips. Bag-valued property cells remain read-only. The shared inspector also provides Source insertion, deletion, drag/reparenting and Undo/Redo. These operations use the shared inspector; the release ZIP contains the same implementation.
 
 See [Usage](docs/010-usage.md), [Architecture](docs/020-architecture.md) and
 [Development](docs/025-development.md) for frame behavior, lifecycle and verification.

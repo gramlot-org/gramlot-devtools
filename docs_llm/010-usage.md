@@ -28,7 +28,9 @@ The **Data** and **Source** tabs show the two Bags as trees. Selecting a node op
 
 An edit is committed when focus leaves the edited row; moving between cells of the same row does not commit. Enter also saves; Escape reloads the row. The shared connection sends a revision-checked `edit` command to the page. The page applies it to the real Bag, and the panel copy changes only when the page reports the change back. A Source attribute change updates the page DOM through the Gramlot renderer.
 
-Bag values and node insertion or removal are not editable from the panel.
+Source rows provide + and − for child insertion and branch deletion. Drag a row to reorder it or move it into another branch. Required parent parameters, such as a border region, are requested before insertion. Undo/Redo covers Source structure and scalar Source/Data edits, with conflict checks against external changes. Business Data is retained when removing a Source branch; moving a branch may recreate its rendered widgets. History does not undo controller or network side effects and does not save Python/JavaScript source files. Bag-valued property cells remain read-only.
+
+These capabilities come from the current shared inspector build. Existing released extension ZIPs are unchanged until a new extension release is published.
 
 <a id="gdt-010-015"></a>
 
